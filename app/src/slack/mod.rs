@@ -1,7 +1,15 @@
+extern crate chrono;
+extern crate hex;
 extern crate serde_qs;
 
 use crate::config::{ConfigState, SlackConfig};
 use crate::renderer::{RenderError, RenderRequest, RenderResult};
+
+use chrono::{TimeZone, Utc};
+
+use crypto::hmac::Hmac;
+use crypto::mac::Mac;
+use crypto::sha2::Sha256;
 
 use rocket::http::Status;
 use rocket::request::{self, FromRequest, Request};
@@ -70,7 +78,7 @@ impl SlackMessage {
 }
 
 pub struct SlackRequestParser {
-    timestamp: String,
+    timestamp: i64,
     signature: String,
     config: SlackConfig,
 }
@@ -95,10 +103,12 @@ impl<'a, 'r> FromRequest<'a, 'r> for SlackRequestParser {
         let slack_config = config.unwrap().get_slack();
 
         let timestamp = req.headers().get_one("X-Slack-Request-Timestamp");
+        let timestamp = timestamp.and_then(|t| t.parse::<i64>().ok());
         let signature = req.headers().get_one("X-Slack-Signature");
+
         match (timestamp, signature) {
             (Some(t), Some(s)) => Outcome::Success(SlackRequestParser {
-                timestamp: t.to_string(),
+                timestamp: t,
                 signature: s.to_string(),
                 config: slack_config,
             }),
@@ -110,8 +120,40 @@ impl<'a, 'r> FromRequest<'a, 'r> for SlackRequestParser {
 impl SlackRequestParser {
     pub fn parse_slash(&self, data: String) -> Result<SlashRequest, SlackParserError> {
         let request = serde_qs::from_str(&data).map_err(|_| SlackParserError::BadQueryString)?;
-        // TODO verify timestamp
-        // TODO verify signature
+
+        // Verify timestamp.
+        if self.config.max_age_seconds.is_some() {
+            let request_time = Utc.timestamp(self.timestamp, 0);
+            let current_time = chrono::Local::now();
+            let elapsed = current_time.signed_duration_since(request_time);
+            if elapsed > time::Duration::seconds(self.config.max_age_seconds.unwrap()) {
+                println!("Rejecting old timestamp: {:?}", elapsed);
+                return Err(SlackParserError::TimestampTooOld);
+            }
+        }
+
+        // Verify signature.
+        if self.config.secret.is_some() {
+            // Remove the version prefix and parse as hex.
+            let signature = self.signature.trim_start_matches("v0=");
+            let signature =
+                hex::decode(signature).map_err(|_| SlackParserError::SignatureInvalid)?;
+
+            // Concat version, timestamp and data for hmac.
+            let basestring = format!("v0:{}:{}", self.timestamp, data);
+
+            let mut hmac = Hmac::new(
+                Sha256::new(),
+                self.config.secret.as_ref().unwrap().as_bytes(),
+            );
+            hmac.input(basestring.as_bytes());
+
+            if !crypto::util::fixed_time_eq(hmac.result().code(), &signature) {
+                println!("Rejecting bad signature");
+                return Err(SlackParserError::SignatureInvalid);
+            }
+        }
+
         Ok(request)
     }
 }

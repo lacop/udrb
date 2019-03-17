@@ -14,7 +14,7 @@ pub struct DomainConfig {
 #[derive(Debug, Deserialize, Clone)]
 pub struct SlackConfig {
     pub secret: Option<String>,
-    pub max_age_seconds: Option<u32>,
+    pub max_age_seconds: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
