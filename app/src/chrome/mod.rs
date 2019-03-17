@@ -1,5 +1,6 @@
 extern crate base64;
 extern crate crypto;
+extern crate dns_lookup;
 extern crate reqwest;
 extern crate websocket;
 
@@ -61,7 +62,16 @@ fn write_text_to_directory(
 
 impl ChromeDriver {
     pub fn new(address: &String) -> Result<ChromeDriver, failure::Error> {
-        let json_url = format!("http://{}/json/list", address);
+        // Chrome only allows connection when the host header is either
+        // localhost or IP, so the "chrome:port" value from docker compose
+        // wouldn't work. Resolve to IP manually.
+        let address : Vec<_> = address.split(':').collect();
+        let (hostname, port) = (address[0], address[1]);
+        let ips = dns_lookup::lookup_host(hostname)?;
+        let ip = ips.first().ok_or(format_err!("Lookup failed"))?;
+
+        let json_url = format!("http://{}:{}/json/list", ip, port);
+        println!("{}", json_url);
         let body = reqwest::get(json_url.as_str())?.text()?;
         let body: serde_json::Value = serde_json::from_str(&body)?;
         let list = body.as_array().ok_or(format_err!("Expected array"))?;

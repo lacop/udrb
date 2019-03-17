@@ -79,7 +79,7 @@ fn slash(
 
 fn main() {
     let config_state = config::ConfigState::from_evn().expect("Error obtaining config");
-
+    
     let sender = Renderer::start(&config_state.get()).expect("Failed to initialize renderer");
 
     rocket::ignite()
