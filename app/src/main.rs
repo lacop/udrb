@@ -16,18 +16,27 @@ mod config;
 mod renderer;
 mod slack;
 
+use config::ConfigState;
 use renderer::{RenderRequest, RenderSender, Renderer};
 use slack::{SlackMessage, SlackRequestParser};
 
 use rocket::http::RawStr;
 use rocket::response::status::BadRequest;
+use rocket::response::NamedFile;
 use rocket::State;
 use rocket_contrib::json::Json;
 
 #[get("/")]
 fn index() -> &'static str {
     // TODO render index
-    "Hello, world!"
+    "UDRB is running..."
+}
+
+#[get("/<file..>")]
+fn static_file(file: std::path::PathBuf, config: State<ConfigState>) -> Option<NamedFile> {
+    // TODO return correct headers for mhtml files
+    let path = config.get().output_dir.join(file);
+    NamedFile::open(path).ok()
 }
 
 #[get("/fetch?<url>&<callback>")]
@@ -76,14 +85,8 @@ fn main() {
         .manage(config_state)
         .manage(sender)
         .mount("/", routes![index])
+        .mount("/static", routes![static_file])
         .mount("/debug", routes![fetch])
         .mount("/slack", routes![slash])
         .launch();
-
-    //let mut chrome = chrome::ChromeDriver::new().unwrap();
-    //chrome.navigate("https://predplatne.dennikn.sk/sign/in/").unwrap();
-    //chrome.foo();
-    //chrome.navigate("https://dennikn.sk/1411992/vo-volebnej-komisii-v-petrzalke-sedi-stefan-agh-obvineny-s-kocnerom-z-falsovania-zmeniek").unwrap();
-    //chrome.save_screenshot(std::path::Path::new("/tmp/output")).unwrap();
-    //chrome.save_pdf(std::path::Path::new("/tmp/output")).unwrap();
 }

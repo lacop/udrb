@@ -7,6 +7,8 @@ use rocket::http::Status;
 use rocket::request::{self, FromRequest, Request};
 use rocket::{Outcome, State};
 
+use std::fmt::Write;
+
 #[derive(Debug, Deserialize)]
 pub struct SlashRequest {
     command: String,
@@ -19,10 +21,7 @@ impl SlashRequest {
         if self.command != "/udrb" {
             return (
                 None,
-                SlackMessage {
-                    response_type: SlackResponseType::Ephemeral,
-                    text: "Unknown command. Use /udrb http://...".to_string(),
-                },
+                SlackMessage::ephemeral("Unknown command. Use /udrb http://...".to_string()),
             );
         }
 
@@ -30,10 +29,7 @@ impl SlashRequest {
         if url.is_none() {
             return (
                 None,
-                SlackMessage {
-                    response_type: SlackResponseType::Ephemeral,
-                    text: "Invalid arguments. Use /udrb http://...".to_string(),
-                },
+                SlackMessage::ephemeral("Invalid arguments. Use /udrb http://...".to_string()),
             );
         }
 
@@ -41,11 +37,10 @@ impl SlashRequest {
             url: url.unwrap(),
             slack_callback: Some(self.response_url),
         };
-        let reply = SlackMessage {
-            response_type: SlackResponseType::Ephemeral,
-            text: "Downloading...".to_string(),
-        };
-        (Some(request), reply)
+        (
+            Some(request),
+            SlackMessage::ephemeral("Downloading...".to_string()),
+        )
     }
 }
 
@@ -60,6 +55,18 @@ pub enum SlackResponseType {
 pub struct SlackMessage {
     response_type: SlackResponseType,
     text: String,
+    #[serde(rename = "mrkdwn")]
+    markdown: bool,
+}
+
+impl SlackMessage {
+    fn ephemeral(text: String) -> SlackMessage {
+        SlackMessage {
+            response_type: SlackResponseType::Ephemeral,
+            text: text,
+            markdown: false,
+        }
+    }
 }
 
 pub struct SlackRequestParser {
@@ -109,12 +116,33 @@ impl SlackRequestParser {
     }
 }
 
+fn post_slack_message(callback: &str, message: SlackMessage) -> Result<(), failure::Error> {
+    let client = reqwest::Client::new();
+    let response = client.post(callback).json(&message).send()?;
+    if !response.status().is_success() {
+        return Err(format_err!("Request failed: {:?}", response));
+    }
+    Ok(())
+}
+
 pub fn post_success(callback: &str, result: &RenderResult) -> Result<(), failure::Error> {
-    println!("SLACK OK {:?} {:?}", callback, result);
-    return Ok(());
+    let mut text = "*UDRBane!*\n".to_string();
+    write!(&mut text, "<{}|PDF version>\n", result.pdf_url).unwrap();
+    write!(&mut text, "<{}|MHTML version> (...)", result.mhtml_url).unwrap();
+
+    post_slack_message(
+        callback,
+        SlackMessage {
+            response_type: SlackResponseType::InChannel,
+            markdown: true,
+            text: text,
+        },
+    )
 }
 
 pub fn post_failure(callback: &str, error: &RenderError) -> Result<(), failure::Error> {
-    println!("SLACK FAIL {:?} {}", callback, error);
-    return Ok(());
+    post_slack_message(
+        callback,
+        SlackMessage::ephemeral(format!("Error downloading: {}", error)),
+    )
 }

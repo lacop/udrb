@@ -1,7 +1,6 @@
 extern crate toml;
 
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::env;
 use std::str::FromStr;
 use std::sync::Mutex;
@@ -20,6 +19,7 @@ pub struct SlackConfig {
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub hostname: String,
     pub output_dir: std::path::PathBuf,
     pub slack: SlackConfig,
     pub domains: HashMap<String, DomainConfig>,
@@ -30,6 +30,7 @@ pub struct ConfigState(Mutex<Config>);
 impl ConfigState {
     // TODO get rid of expect/unwrap? But crashing here is fine.
     pub fn from_evn() -> Result<ConfigState, failure::Error> {
+        let hostname = env::var("HOSTNAME")?;
         let output_dir = env::var("UDRB_OUTPUT")?;
 
         let config_path = env::var("UDRB_CONFIG")?;
@@ -51,6 +52,7 @@ impl ConfigState {
         let slack_config: SlackConfig = slack.clone().try_into().unwrap();
 
         Ok(ConfigState(Mutex::new(Config {
+            hostname: hostname,
             output_dir: std::path::PathBuf::from_str(&output_dir)?,
             slack: slack_config,
             domains: domains,

@@ -52,8 +52,8 @@ fn wrap_internal_error(e: failure::Error) -> RenderError {
 
 #[derive(Debug)]
 pub struct RenderResult {
-    pdf_path: std::path::PathBuf,
-    mhtml_path: std::path::PathBuf,
+    pub pdf_url: String,
+    pub mhtml_url: String,
 }
 
 fn handle_request(
@@ -96,9 +96,10 @@ fn handle_request(
         .save_mhtml(config.output_dir.as_path())
         .map_err(wrap_internal_error)?;
 
+    // TODO use uri! macro with proper input.
     Ok(RenderResult {
-        pdf_path,
-        mhtml_path,
+        pdf_url: format!("{}/static/{}", config.hostname, pdf_path),
+        mhtml_url: format!("{}/static/{}", config.hostname, mhtml_path),
     })
 }
 

@@ -28,25 +28,25 @@ fn write_bytes_to_directory(
     bytes: &[u8],
     dir: &std::path::Path,
     suffix: &str,
-) -> Result<std::path::PathBuf, failure::Error> {
+) -> Result<String, failure::Error> {
     let mut hasher = Sha3::sha3_256();
     hasher.input(&bytes);
 
     let filename = hasher.result_str() + suffix;
-    let output_path = dir.join(filename);
+    let output_path = dir.join(&filename);
 
     std::fs::create_dir_all(dir)?;
     let mut buffer = File::create(&output_path)?;
     buffer.write(&bytes)?;
 
-    Ok(output_path)
+    Ok(filename)
 }
 
 fn write_base64_to_directory(
     data: &str,
     dir: &std::path::Path,
     suffix: &str,
-) -> Result<std::path::PathBuf, failure::Error> {
+) -> Result<String, failure::Error> {
     let bytes = base64::decode(data)?;
     write_bytes_to_directory(&bytes, dir, suffix)
 }
@@ -55,7 +55,7 @@ fn write_text_to_directory(
     data: &str,
     dir: &std::path::Path,
     suffix: &str,
-) -> Result<std::path::PathBuf, failure::Error> {
+) -> Result<String, failure::Error> {
     write_bytes_to_directory(data.as_bytes(), dir, suffix)
 }
 
@@ -132,10 +132,7 @@ impl ChromeDriver {
     }
 
     // TODO this is broken for both -stable and -trunk. Try to fix.
-    pub fn save_screenshot(
-        &mut self,
-        dir: &std::path::Path,
-    ) -> Result<std::path::PathBuf, failure::Error> {
+    pub fn save_screenshot(&mut self, dir: &std::path::Path) -> Result<String, failure::Error> {
         let result = self.get_result("Page.getLayoutMetrics", serde_json::Value::Null)?;
         let width = result["contentSize"]["width"]
             .as_i64()
@@ -152,10 +149,7 @@ impl ChromeDriver {
         write_base64_to_directory(data, dir, ".png")
     }
 
-    pub fn save_pdf(
-        &mut self,
-        dir: &std::path::Path,
-    ) -> Result<std::path::PathBuf, failure::Error> {
+    pub fn save_pdf(&mut self, dir: &std::path::Path) -> Result<String, failure::Error> {
         // A4 paper size in inches.
         let params =
             json!({"landscape": false, "scale": 1, "paperWidth": 8.27, "paperHeight": 11.69});
@@ -164,10 +158,7 @@ impl ChromeDriver {
         write_base64_to_directory(data, dir, ".pdf")
     }
 
-    pub fn save_mhtml(
-        &mut self,
-        dir: &std::path::Path,
-    ) -> Result<std::path::PathBuf, failure::Error> {
+    pub fn save_mhtml(&mut self, dir: &std::path::Path) -> Result<String, failure::Error> {
         let result = self.get_result("Page.captureSnapshot", serde_json::Value::Null)?;
         let data = result["data"].as_str().ok_or(format_err!("Missing data"))?;
         write_text_to_directory(data, dir, ".mhtml")
