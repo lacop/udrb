@@ -1,4 +1,4 @@
 /app/target/
 /app/Cargo.lock
 
-config.toml
+/config/config.toml
