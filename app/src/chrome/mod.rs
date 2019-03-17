@@ -171,4 +171,13 @@ impl ChromeDriver {
         std::thread::sleep(std::time::Duration::from_secs(3));
         Ok(())
     }
+
+    pub fn get_title(&mut self) -> Result<String, failure::Error> {
+        let params = json!({"expression": "document.title", "returnByValue": true});
+        let result = self.get_result("Runtime.evaluate", params)?;
+        let title = result["result"]["value"]
+            .as_str()
+            .ok_or(format_err!("Failed to get title"))?;
+        Ok(title.to_string())
+    }
 }

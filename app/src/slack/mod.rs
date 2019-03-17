@@ -116,6 +116,13 @@ impl SlackRequestParser {
     }
 }
 
+// From https://api.slack.com/docs/message-formatting
+fn slack_encode(s: &String) -> String {
+    s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+}
+
 fn post_slack_message(callback: &str, message: SlackMessage) -> Result<(), failure::Error> {
     let client = reqwest::Client::new();
     let response = client.post(callback).json(&message).send()?;
@@ -126,9 +133,9 @@ fn post_slack_message(callback: &str, message: SlackMessage) -> Result<(), failu
 }
 
 pub fn post_success(callback: &str, result: &RenderResult) -> Result<(), failure::Error> {
-    let mut text = "*UDRBane!*\n".to_string();
-    write!(&mut text, "<{}|PDF version>\n", result.pdf_url).unwrap();
-    write!(&mut text, "<{}|MHTML version> (...)", result.mhtml_url).unwrap();
+    let mut text = format!(":page_with_curl: *{}*\n", slack_encode(&result.title));
+    write!(&mut text, ":lock: <{}|Original link>\n", result.orig_url).unwrap();
+    write!(&mut text, ":unlock: <{}|PDF version>", result.pdf_url).unwrap();
 
     post_slack_message(
         callback,

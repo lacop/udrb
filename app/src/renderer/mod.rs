@@ -52,8 +52,11 @@ fn wrap_internal_error(e: failure::Error) -> RenderError {
 
 #[derive(Debug)]
 pub struct RenderResult {
+    // Title of the document.
+    pub title: String,
+    // URLs to the original document and rendered versions.
+    pub orig_url: String,
     pub pdf_url: String,
-    pub mhtml_url: String,
 }
 
 fn handle_request(
@@ -88,18 +91,19 @@ fn handle_request(
         .navigate(req.url.as_str())
         .map_err(wrap_internal_error)?;
 
+    let title = chrome.get_title().map_err(wrap_internal_error)?;
+
     // TODO also do screenshot when fixed
+    // TODO also do mhtml when content type is fixed
     let pdf_path = chrome
         .save_pdf(config.output_dir.as_path())
-        .map_err(wrap_internal_error)?;
-    let mhtml_path = chrome
-        .save_mhtml(config.output_dir.as_path())
         .map_err(wrap_internal_error)?;
 
     // TODO use uri! macro with proper input.
     Ok(RenderResult {
+        title: title,
+        orig_url: req.url.as_str().to_string(),
         pdf_url: format!("{}/static/{}", config.hostname, pdf_path),
-        mhtml_url: format!("{}/static/{}", config.hostname, mhtml_path),
     })
 }
 
