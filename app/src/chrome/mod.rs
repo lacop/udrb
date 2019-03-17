@@ -60,8 +60,9 @@ fn write_text_to_directory(
 }
 
 impl ChromeDriver {
-    pub fn new() -> Result<ChromeDriver, failure::Error> {
-        let body = reqwest::get("http://127.0.0.1:9222/json/list")?.text()?;
+    pub fn new(address: &String) -> Result<ChromeDriver, failure::Error> {
+        let json_url = format!("http://{}/json/list", address);
+        let body = reqwest::get(json_url.as_str())?.text()?;
         let body: serde_json::Value = serde_json::from_str(&body)?;
         let list = body.as_array().ok_or(format_err!("Expected array"))?;
         ensure!(list.len() > 0, "Need at least one existing tab");

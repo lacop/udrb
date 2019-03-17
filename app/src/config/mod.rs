@@ -21,6 +21,7 @@ pub struct SlackConfig {
 pub struct Config {
     pub hostname: String,
     pub output_dir: std::path::PathBuf,
+    pub chrome_address: String,
     pub slack: SlackConfig,
     pub domains: HashMap<String, DomainConfig>,
 }
@@ -32,6 +33,7 @@ impl ConfigState {
     pub fn from_evn() -> Result<ConfigState, failure::Error> {
         let hostname = env::var("HOSTNAME")?;
         let output_dir = env::var("UDRB_OUTPUT")?;
+        let chrome_address = env::var("UDRB_CHROME_ADDRESS")?;
 
         let config_path = env::var("UDRB_CONFIG")?;
         let config = std::fs::read_to_string(config_path)?;
@@ -54,6 +56,7 @@ impl ConfigState {
         Ok(ConfigState(Mutex::new(Config {
             hostname: hostname,
             output_dir: std::path::PathBuf::from_str(&output_dir)?,
+            chrome_address: chrome_address,
             slack: slack_config,
             domains: domains,
         })))

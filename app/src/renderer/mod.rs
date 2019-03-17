@@ -112,7 +112,7 @@ impl Renderer {
         // Render queue channel.
         let (sender, receiver) = mpsc::channel();
         // Initialize Chrome driver.
-        let chrome = ChromeDriver::new()?;
+        let chrome = ChromeDriver::new(&config.chrome_address)?;
 
         let mut renderer = Renderer {
             config: config.clone(),
