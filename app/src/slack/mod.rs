@@ -11,10 +11,12 @@ use crypto::hmac::Hmac;
 use crypto::mac::Mac;
 use crypto::sha2::Sha256;
 
+use rocket::data::Data;
 use rocket::http::Status;
 use rocket::request::{self, FromRequest, Request};
 use rocket::{Outcome, State};
 
+use std::io::Read;
 use std::fmt::Write;
 
 #[derive(Debug, Deserialize)]
@@ -118,7 +120,11 @@ impl<'a, 'r> FromRequest<'a, 'r> for SlackRequestParser {
 }
 
 impl SlackRequestParser {
-    pub fn parse_slash(&self, data: String) -> Result<SlashRequest, SlackParserError> {
+    pub fn parse_slash(&self, raw_data: Data) -> Result<SlashRequest, SlackParserError> {
+        // TODO size limit here to avoid crashing?
+        let mut data = String::new();
+        raw_data.open().read_to_string(&mut data).map_err(|_| SlackParserError::BadQueryString)?;
+
         let request = serde_qs::from_str(&data).map_err(|_| SlackParserError::BadQueryString)?;
 
         // Verify timestamp.

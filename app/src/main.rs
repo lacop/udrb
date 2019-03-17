@@ -20,6 +20,7 @@ use config::ConfigState;
 use renderer::{RenderRequest, RenderSender, Renderer};
 use slack::{SlackMessage, SlackRequestParser};
 
+use rocket::data::Data;
 use rocket::http::RawStr;
 use rocket::response::status::BadRequest;
 use rocket::response::NamedFile;
@@ -61,7 +62,7 @@ fn fetch(
 #[post("/slash", data = "<data>")]
 fn slash(
     parser: SlackRequestParser,
-    data: String,
+    data: Data,
     sender: State<RenderSender>,
 ) -> Result<Json<SlackMessage>, BadRequest<String>> {
     let request = parser
