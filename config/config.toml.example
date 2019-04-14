@@ -6,9 +6,9 @@ secret = "FOO"
 max_age_seconds = 600
 
 [domain.example]
-hosts = ["example.com"]
+host = "example.com$"
 login_page = "http://example.com"
 login_script = "document.getElementById..."
 
 [domain.another]
-hosts = ["another.example.com"]
+host = "^another.example.com$"
