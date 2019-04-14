@@ -14,8 +14,7 @@ RUN rm /app/src/*
 
 # Copy real source & build real app.
 COPY ./app/src /app/src
-
-WORKDIR /app
+RUN rm ./target/release/deps/app*
 RUN cargo install --path .
 
 EXPOSE 2021
