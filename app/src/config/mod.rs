@@ -46,23 +46,25 @@ impl ConfigState {
                 .case_insensitive(true)
                 .build()
                 .unwrap();
-            domains.push(DomainConfig{
+            domains.push(DomainConfig {
                 id: id.to_string(),
-                host_regex: host_regex,
-                login_page: table.get("login_page").map(|x| x.as_str().unwrap().to_string()),
-                login_script: table.get("login_script").map(|x| x.as_str().unwrap().to_string()),
+                host_regex,
+                login_page: table
+                    .get("login_page")
+                    .map(|x| x.as_str().unwrap().to_string()),
+                login_script: table
+                    .get("login_script")
+                    .map(|x| x.as_str().unwrap().to_string()),
             });
         }
-
         let slack = config.get("slack").unwrap();
-        let slack_config: SlackConfig = slack.clone().try_into().unwrap();
 
         Ok(ConfigState(Mutex::new(Config {
-            hostname: hostname,
+            hostname,
             output_dir: std::path::PathBuf::from_str(&output_dir)?,
-            chrome_address: chrome_address,
-            slack: slack_config,
-            domains: domains,
+            chrome_address,
+            slack: slack.clone().try_into().unwrap(),
+            domains,
         })))
     }
 

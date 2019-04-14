@@ -111,7 +111,7 @@ fn handle_request(
 
     // TODO use uri! macro with proper input.
     Ok(RenderResult {
-        title: title,
+        title,
         orig_url: req.url.as_str().to_string(),
         pdf_url: format!("{}/static/{}", config.hostname, pdf_path),
         user: req.user.as_ref().cloned(),

@@ -38,7 +38,7 @@ fn write_bytes_to_directory(
 
     std::fs::create_dir_all(dir)?;
     let mut buffer = File::create(&output_path)?;
-    buffer.write(&bytes)?;
+    buffer.write_all(&bytes)?;
 
     Ok(filename)
 }
@@ -61,31 +61,30 @@ fn write_text_to_directory(
 }
 
 impl ChromeDriver {
-    pub fn new(address: &String) -> Result<ChromeDriver, failure::Error> {
+    pub fn new(address: &str) -> Result<ChromeDriver, failure::Error> {
         // Chrome only allows connection when the host header is either
         // localhost or IP, so the "chrome:port" value from docker compose
         // wouldn't work. Resolve to IP manually.
         let address: Vec<_> = address.split(':').collect();
         let (hostname, port) = (address[0], address[1]);
         let ips = dns_lookup::lookup_host(hostname)?;
-        let ip = ips.first().ok_or(format_err!("Lookup failed"))?;
+        let ip = ips.first().ok_or_else(|| format_err!("Lookup failed"))?;
 
         let json_url = format!("http://{}:{}/json/list", ip, port);
         println!("{}", json_url);
         let body = reqwest::get(json_url.as_str())?.text()?;
         let body: serde_json::Value = serde_json::from_str(&body)?;
-        let list = body.as_array().ok_or(format_err!("Expected array"))?;
-        ensure!(list.len() > 0, "Need at least one existing tab");
+        let list = body
+            .as_array()
+            .ok_or_else(|| format_err!("Expected array"))?;
+        ensure!(!list.is_empty(), "Need at least one existing tab");
 
         let websocket_url = list[0]["webSocketDebuggerUrl"]
             .as_str()
-            .ok_or(format_err!("Invalid websocket url"))?;
+            .ok_or_else(|| format_err!("Invalid websocket url"))?;
         let ws = websocket::ClientBuilder::new(&websocket_url)?.connect_insecure()?;
 
-        let chrome = ChromeDriver {
-            ws: ws,
-            message_id: 0,
-        };
+        let chrome = ChromeDriver { ws, message_id: 0 };
 
         // TODO proper await for events
         // chrome.chrome_command("Page.setLifecycleEventsEnabled", json!({"enabled": false}))?;
@@ -101,7 +100,7 @@ impl ChromeDriver {
         let command = ChromeCommandRequest {
             id: self.message_id,
             method: method.to_string(),
-            params: params,
+            params,
         };
         self.message_id += 1;
 
@@ -147,16 +146,18 @@ impl ChromeDriver {
         let result = self.get_result("Page.getLayoutMetrics", serde_json::Value::Null)?;
         let width = result["contentSize"]["width"]
             .as_i64()
-            .ok_or(format_err!("Missing dimension"))?;
+            .ok_or_else(|| format_err!("Missing dimension"))?;
         let height = result["contentSize"]["height"]
             .as_i64()
-            .ok_or(format_err!("Missing dimension"))?;
+            .ok_or_else(|| format_err!("Missing dimension"))?;
         println!("width {:?} height {:?}", width, height);
 
         let params =
             json!({"clip": {"x": 0, "y": 0, "width": width, "height": height, "scale": 1}});
         let result = self.get_result("Page.captureScreenshot", params)?;
-        let data = result["data"].as_str().ok_or(format_err!("Missing data"))?;
+        let data = result["data"]
+            .as_str()
+            .ok_or_else(|| format_err!("Missing data"))?;
         write_base64_to_directory(data, dir, ".png")
     }
 
@@ -165,13 +166,17 @@ impl ChromeDriver {
         let params =
             json!({"landscape": false, "scale": 1, "paperWidth": 8.27, "paperHeight": 11.69});
         let result = self.get_result("Page.printToPDF", params)?;
-        let data = result["data"].as_str().ok_or(format_err!("Missing data"))?;
+        let data = result["data"]
+            .as_str()
+            .ok_or_else(|| format_err!("Missing data"))?;
         write_base64_to_directory(data, dir, ".pdf")
     }
 
     pub fn save_mhtml(&mut self, dir: &std::path::Path) -> Result<String, failure::Error> {
         let result = self.get_result("Page.captureSnapshot", serde_json::Value::Null)?;
-        let data = result["data"].as_str().ok_or(format_err!("Missing data"))?;
+        let data = result["data"]
+            .as_str()
+            .ok_or_else(|| format_err!("Missing data"))?;
         write_text_to_directory(data, dir, ".mhtml")
     }
 
@@ -188,7 +193,7 @@ impl ChromeDriver {
         let result = self.get_result("Runtime.evaluate", params)?;
         let title = result["result"]["value"]
             .as_str()
-            .ok_or(format_err!("Failed to get title"))?;
+            .ok_or_else(|| format_err!("Failed to get title"))?;
         Ok(title.to_string())
     }
 }

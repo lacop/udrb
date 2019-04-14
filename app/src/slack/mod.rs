@@ -79,7 +79,7 @@ impl SlackMessage {
     fn ephemeral(text: String) -> SlackMessage {
         SlackMessage {
             response_type: SlackResponseType::Ephemeral,
-            text: text,
+            text,
             markdown: false,
         }
     }
@@ -174,7 +174,7 @@ impl SlackRequestParser {
 }
 
 // From https://api.slack.com/docs/message-formatting
-fn slack_encode(s: &String) -> String {
+fn slack_encode(s: &str) -> String {
     s.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
@@ -192,19 +192,20 @@ fn post_slack_message(callback: &str, message: SlackMessage) -> Result<(), failu
 pub fn post_success(callback: &str, result: &RenderResult) -> Result<(), failure::Error> {
     let mut text = String::new();
     if result.user.is_some() {
-        write!(
+        writeln!(
             &mut text,
-            ":bust_in_silhouette: {}\n",
+            ":bust_in_silhouette: {}",
             result.user.as_ref().unwrap()
         )
         .unwrap();
     }
-    write!(
+    writeln!(
         &mut text,
-        ":page_with_curl: *{}*\n",
+        ":page_with_curl: *{}*",
         slack_encode(&result.title)
-    );
-    write!(&mut text, ":lock: <{}|Original link>\n", result.orig_url).unwrap();
+    )
+    .unwrap();
+    writeln!(&mut text, ":lock: <{}|Original link>", result.orig_url).unwrap();
     write!(&mut text, ":unlock: <{}|PDF version>", result.pdf_url).unwrap();
 
     post_slack_message(
@@ -212,7 +213,7 @@ pub fn post_success(callback: &str, result: &RenderResult) -> Result<(), failure
         SlackMessage {
             response_type: SlackResponseType::InChannel,
             markdown: true,
-            text: text,
+            text,
         },
     )
 }
