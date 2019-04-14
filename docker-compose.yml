@@ -18,16 +18,12 @@ services:
         source: ./config
         target: /cfg
         read_only: true
-      - type: volume
-        source: output
+      - type: bind
+        source: ./output
         target: /output
-        volume:
-          nocopy: true
   chrome:
     image: "alpeware/chrome-headless-trunk"
     ports:
       - "9222:9222"
     environment: 
       - CHROME_OPTS="--hide-scrollbars"
-volumes:
-  output:
