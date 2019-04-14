@@ -65,7 +65,7 @@ impl ChromeDriver {
         // Chrome only allows connection when the host header is either
         // localhost or IP, so the "chrome:port" value from docker compose
         // wouldn't work. Resolve to IP manually.
-        let address : Vec<_> = address.split(':').collect();
+        let address: Vec<_> = address.split(':').collect();
         let (hostname, port) = (address[0], address[1]);
         let ips = dns_lookup::lookup_host(hostname)?;
         let ip = ips.first().ok_or(format_err!("Lookup failed"))?;

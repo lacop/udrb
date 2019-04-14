@@ -6,6 +6,7 @@ extern crate failure;
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
+extern crate regex;
 #[macro_use]
 extern crate rocket;
 extern crate rocket_contrib;
@@ -82,7 +83,7 @@ fn slash(
 
 fn main() {
     let config_state = config::ConfigState::from_evn().expect("Error obtaining config");
-    
+
     let sender = Renderer::start(&config_state.get()).expect("Failed to initialize renderer");
 
     rocket::ignite()

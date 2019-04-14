@@ -75,10 +75,14 @@ fn handle_request(
         return Err(RenderError::InvalidUrlError);
     }
     let host = req.url.domain().ok_or(RenderError::InvalidUrlError)?;
-    let domain_config = config
-        .domains
-        .get(host)
-        .ok_or(RenderError::UnsupportedDomain)?;
+    let mut domain_config = None;
+    for dc in &config.domains {
+        if dc.host_regex.is_match(host) {
+            domain_config = Some(dc);
+            break;
+        }
+    }
+    let domain_config = domain_config.ok_or(RenderError::UnsupportedDomain)?;
 
     // Navigate to login page and run login script if specified.
     if domain_config.login_page.is_some() {
@@ -123,7 +127,7 @@ impl Renderer {
 
         // Initialize Chrome driver.
         let chrome = ChromeDriver::new(&config.chrome_address)?;
-        
+
         let mut renderer = Renderer {
             config: config.clone(),
             chrome,
@@ -140,11 +144,13 @@ impl Renderer {
     fn render_loop(&mut self) {
         for request in self.receiver.iter() {
             let unknown = "?".to_string();
-            println!("Handling request from @{} in #{} ({}): {:?}",
-                     request.user.as_ref().unwrap_or(&unknown),
-                     request.channel.as_ref().unwrap_or(&unknown),
-                     request.team.as_ref().unwrap_or(&unknown),
-                     request.url);
+            println!(
+                "Handling request from @{} in #{} ({}): {:?}",
+                request.user.as_ref().unwrap_or(&unknown),
+                request.channel.as_ref().unwrap_or(&unknown),
+                request.team.as_ref().unwrap_or(&unknown),
+                request.url
+            );
             let result = handle_request(&request, &self.config, &mut self.chrome);
 
             if request.slack_callback.is_some() {

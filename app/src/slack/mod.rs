@@ -16,8 +16,8 @@ use rocket::http::Status;
 use rocket::request::{self, FromRequest, Request};
 use rocket::{Outcome, State};
 
-use std::io::Read;
 use std::fmt::Write;
+use std::io::Read;
 
 #[derive(Debug, Deserialize)]
 pub struct SlashRequest {
@@ -129,7 +129,10 @@ impl SlackRequestParser {
     pub fn parse_slash(&self, raw_data: Data) -> Result<SlashRequest, SlackParserError> {
         // TODO size limit here to avoid crashing?
         let mut data = String::new();
-        raw_data.open().read_to_string(&mut data).map_err(|_| SlackParserError::BadQueryString)?;
+        raw_data
+            .open()
+            .read_to_string(&mut data)
+            .map_err(|_| SlackParserError::BadQueryString)?;
 
         let request = serde_qs::from_str(&data).map_err(|_| SlackParserError::BadQueryString)?;
 
@@ -189,9 +192,18 @@ fn post_slack_message(callback: &str, message: SlackMessage) -> Result<(), failu
 pub fn post_success(callback: &str, result: &RenderResult) -> Result<(), failure::Error> {
     let mut text = String::new();
     if result.user.is_some() {
-        write!(&mut text, ":bust_in_silhouette: {}\n", result.user.as_ref().unwrap()).unwrap();
+        write!(
+            &mut text,
+            ":bust_in_silhouette: {}\n",
+            result.user.as_ref().unwrap()
+        )
+        .unwrap();
     }
-    write!(&mut text, ":page_with_curl: *{}*\n", slack_encode(&result.title));
+    write!(
+        &mut text,
+        ":page_with_curl: *{}*\n",
+        slack_encode(&result.title)
+    );
     write!(&mut text, ":lock: <{}|Original link>\n", result.orig_url).unwrap();
     write!(&mut text, ":unlock: <{}|PDF version>", result.pdf_url).unwrap();
 
