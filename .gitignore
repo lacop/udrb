@@ -2,3 +2,5 @@
 /app/Cargo.lock
 
 /config/config.toml
+
+/output/*
