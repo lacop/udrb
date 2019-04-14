@@ -24,6 +24,9 @@ pub struct SlashRequest {
     command: String,
     text: String,
     response_url: String,
+    user_name: Option<String>,
+    channel_name: Option<String>,
+    team_domain: Option<String>,
 }
 
 impl SlashRequest {
@@ -46,6 +49,9 @@ impl SlashRequest {
         let request = RenderRequest {
             url: url.unwrap(),
             slack_callback: Some(self.response_url),
+            user: self.user_name,
+            channel: self.channel_name,
+            team: self.team_domain,
         };
         (
             Some(request),
@@ -181,7 +187,11 @@ fn post_slack_message(callback: &str, message: SlackMessage) -> Result<(), failu
 }
 
 pub fn post_success(callback: &str, result: &RenderResult) -> Result<(), failure::Error> {
-    let mut text = format!(":page_with_curl: *{}*\n", slack_encode(&result.title));
+    let mut text = String::new();
+    if result.user.is_some() {
+        write!(&mut text, ":bust_in_silhouette: {}\n", result.user.as_ref().unwrap()).unwrap();
+    }
+    write!(&mut text, ":page_with_curl: *{}*\n", slack_encode(&result.title));
     write!(&mut text, ":lock: <{}|Original link>\n", result.orig_url).unwrap();
     write!(&mut text, ":unlock: <{}|PDF version>", result.pdf_url).unwrap();
 

@@ -10,6 +10,9 @@ use std::thread;
 pub struct RenderRequest {
     pub url: url::Url,
     pub slack_callback: Option<String>,
+    pub user: Option<String>,
+    pub channel: Option<String>,
+    pub team: Option<String>,
 }
 
 // Send part of the render queue.
@@ -57,6 +60,10 @@ pub struct RenderResult {
     // URLs to the original document and rendered versions.
     pub orig_url: String,
     pub pdf_url: String,
+    // User, channel and team names.
+    pub user: Option<String>,
+    pub channel: Option<String>,
+    pub team: Option<String>,
 }
 
 fn handle_request(
@@ -72,7 +79,6 @@ fn handle_request(
         .domains
         .get(host)
         .ok_or(RenderError::UnsupportedDomain)?;
-    println!("{:?} {:?} {:?}", req, host, domain_config);
 
     // Navigate to login page and run login script if specified.
     if domain_config.login_page.is_some() {
@@ -104,6 +110,9 @@ fn handle_request(
         title: title,
         orig_url: req.url.as_str().to_string(),
         pdf_url: format!("{}/static/{}", config.hostname, pdf_path),
+        user: req.user.as_ref().cloned(),
+        channel: req.channel.as_ref().cloned(),
+        team: req.team.as_ref().cloned(),
     })
 }
 
@@ -130,9 +139,13 @@ impl Renderer {
 
     fn render_loop(&mut self) {
         for request in self.receiver.iter() {
-            println!("Handling request {:?}", request);
+            let unknown = "?".to_string();
+            println!("Handling request from @{} in #{} ({}): {:?}",
+                     request.user.as_ref().unwrap_or(&unknown),
+                     request.channel.as_ref().unwrap_or(&unknown),
+                     request.team.as_ref().unwrap_or(&unknown),
+                     request.url);
             let result = handle_request(&request, &self.config, &mut self.chrome);
-            println!("Request result: {:?}", result);
 
             if request.slack_callback.is_some() {
                 let callback = request.slack_callback.as_ref().unwrap();
@@ -140,7 +153,11 @@ impl Renderer {
                     Ok(r) => slack::post_success(callback, &r),
                     Err(e) => slack::post_failure(callback, &e),
                 };
-                println!("Slack posting result: {:?}", slack_result);
+                if slack_result.is_err() {
+                    println!("Slack posting failed: {:?}", slack_result.unwrap_err());
+                }
+            } else {
+                println!("Request failed: {:?}", result.unwrap_err());
             }
         }
     }

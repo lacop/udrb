@@ -54,6 +54,9 @@ fn fetch(
     sender.render(RenderRequest {
         url: url.clone(),
         slack_callback: callback,
+        user: None,
+        channel: None,
+        team: None,
     })?;
 
     Ok(format!("Fetching {:?} in the background", url))
