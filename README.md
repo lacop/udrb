@@ -18,3 +18,13 @@ Launch on remote:
 ```
 $ sudo docker-compose up -d
 ```
+
+## Local development
+
+```
+# Set up reverse SSH tunel to the host configured for slash command (remote 2102 -> local 2101)
+$ ssh -f -N -T -R2102:localhost:2101 lacop.dev
+# Run local version.
+# TODO change to env file/args to allow overriding stuff here
+$ docker-compose build && docker-compose up
+```
