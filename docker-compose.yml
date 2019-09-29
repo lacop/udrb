@@ -1,12 +1,12 @@
-version: '3.2'
+version: "3.2"
 services:
   app:
     build: .
     ports:
       - "2101:2101"
-    depends_on: 
+    depends_on:
       - chrome
-    environment: 
+    environment:
       - ROCKET_ADDRESS=0.0.0.0
       - ROCKET_PORT=2101
       - HOSTNAME=https://udrb.lacop.dev
@@ -25,5 +25,5 @@ services:
     image: "alpeware/chrome-headless-trunk"
     ports:
       - "9222:9222"
-    environment: 
+    environment:
       - CHROME_OPTS="--hide-scrollbars"
