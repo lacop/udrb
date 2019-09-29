@@ -61,6 +61,8 @@ fn write_text_to_directory(
 }
 
 impl ChromeDriver {
+    // TODO if chrome crashes we should dynamically restart it (with docker compose) and here we need
+    // to re-fetch the WS url
     pub fn new(address: &str) -> Result<ChromeDriver, failure::Error> {
         // Chrome only allows connection when the host header is either
         // localhost or IP, so the "chrome:port" value from docker compose
@@ -141,7 +143,7 @@ impl ChromeDriver {
         Ok(())
     }
 
-    // TODO this is broken for both -stable and -trunk. Try to fix.
+    // TODO try to safeguard against too big pages with some hard limits
     pub fn save_screenshot(&mut self, dir: &std::path::Path) -> Result<String, failure::Error> {
         let result = self.get_result("Page.getLayoutMetrics", serde_json::Value::Null)?;
         let width = result["contentSize"]["width"]
@@ -150,7 +152,12 @@ impl ChromeDriver {
         let height = result["contentSize"]["height"]
             .as_i64()
             .ok_or_else(|| format_err!("Missing dimension"))?;
-        println!("width {:?} height {:?}", width, height);
+
+        let params = json!({"width": width, "screenWidth": width,
+                            "height": height, "screenHeight": height,
+                            "scale": 1, "deviceScaleFactor": 1,
+                            "mobile": false});
+        let _ = self.get_result("Emulation.setDeviceMetricsOverride", params)?;
 
         let params =
             json!({"clip": {"x": 0, "y": 0, "width": width, "height": height, "scale": 1}});

@@ -207,6 +207,13 @@ pub fn post_success(callback: &str, result: &RenderResult) -> Result<(), failure
     .unwrap();
     writeln!(&mut text, ":lock: <{}|Original link>", result.orig_url).unwrap();
     write!(&mut text, ":unlock: <{}|PDF version>", result.pdf_url).unwrap();
+    if result.png_url.is_some() {
+        write!(
+            &mut text,
+            "\n:camera: <{}|Screenshot>",
+            result.png_url.as_ref().unwrap()
+        );
+    }
 
     post_slack_message(
         callback,

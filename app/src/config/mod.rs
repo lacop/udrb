@@ -59,13 +59,15 @@ impl ConfigState {
         }
         let slack = config.get("slack").unwrap();
 
-        Ok(ConfigState(Mutex::new(Config {
+        let config = Config {
             hostname,
             output_dir: std::path::PathBuf::from_str(&output_dir)?,
             chrome_address,
             slack: slack.clone().try_into().unwrap(),
             domains,
-        })))
+        };
+        println!("{:?}", config);
+        Ok(ConfigState(Mutex::new(config)))
     }
 
     pub fn get(&self) -> Config {
