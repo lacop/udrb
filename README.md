@@ -14,8 +14,16 @@ Copy over config:
 $ scp config/config.toml lacop@lacop.dev:udrb/config/config.toml
 ```
 
+Update & rebuild
+```
+$ git pull origin master
+$ sudo docker-compose build
+```
+
 Launch on remote:
 ```
+# Stop if running already
+$ sudo docker-compose down -v
 $ sudo docker-compose up -d
 ```
 
