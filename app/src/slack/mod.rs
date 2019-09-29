@@ -212,7 +212,8 @@ pub fn post_success(callback: &str, result: &RenderResult) -> Result<(), failure
             &mut text,
             "\n:camera: <{}|Screenshot>",
             result.png_url.as_ref().unwrap()
-        );
+        )
+        .unwrap();
     }
 
     post_slack_message(
