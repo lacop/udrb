@@ -4,6 +4,8 @@ use std::env;
 use std::str::FromStr;
 use std::sync::Mutex;
 
+use log::debug;
+
 #[derive(Debug, Clone)]
 pub struct DomainConfig {
     pub id: String,
@@ -31,7 +33,7 @@ pub struct ConfigState(Mutex<Config>);
 
 impl ConfigState {
     // TODO get rid of expect/unwrap? But crashing here is fine.
-    pub fn from_evn() -> Result<ConfigState, failure::Error> {
+    pub fn from_env() -> Result<ConfigState, failure::Error> {
         let hostname = env::var("HOSTNAME")?;
         let output_dir = env::var("UDRB_OUTPUT")?;
         let chrome_address = env::var("UDRB_CHROME_ADDRESS")?;
@@ -66,7 +68,6 @@ impl ConfigState {
             slack: slack.clone().try_into().unwrap(),
             domains,
         };
-        println!("{:?}", config);
         Ok(ConfigState(Mutex::new(config)))
     }
 

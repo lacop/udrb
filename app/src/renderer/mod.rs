@@ -6,6 +6,8 @@ use std::sync::mpsc;
 use std::sync::Mutex;
 use std::thread;
 
+use log::{error, info};
+
 #[derive(Debug)]
 pub struct RenderRequest {
     pub url: url::Url,
@@ -118,7 +120,7 @@ fn handle_request(
         .save_screenshot(config.output_dir.as_path())
         .map_err(wrap_internal_error);
     if screenshot_result.is_err() {
-        println!("Screenshot failed: {:?}", screenshot_result);
+        error!("Screenshot failed: {:?}", screenshot_result);
     }
     let png_url = screenshot_result
         .ok()
@@ -161,7 +163,7 @@ impl Renderer {
     fn render_loop(&mut self) {
         for request in self.receiver.iter() {
             let unknown = "?".to_string();
-            println!(
+            info!(
                 "Handling request from @{} in #{} ({}): {:?}",
                 request.user.as_ref().unwrap_or(&unknown),
                 request.channel.as_ref().unwrap_or(&unknown),
@@ -177,10 +179,10 @@ impl Renderer {
                     Err(e) => slack::post_failure(callback, &e),
                 };
                 if slack_result.is_err() {
-                    println!("Slack posting failed: {:?}", slack_result.unwrap_err());
+                    error!("Slack posting failed: {:?}", slack_result.unwrap_err());
                 }
             } else {
-                println!("Request failed: {:?}", result.unwrap_err());
+                error!("Request failed: {:?}", result.unwrap_err());
             }
         }
     }

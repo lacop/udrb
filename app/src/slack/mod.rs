@@ -11,6 +11,8 @@ use crypto::hmac::Hmac;
 use crypto::mac::Mac;
 use crypto::sha2::Sha256;
 
+use log::error;
+
 use rocket::data::Data;
 use rocket::http::Status;
 use rocket::request::{self, FromRequest, Request};
@@ -142,7 +144,7 @@ impl SlackRequestParser {
             let current_time = chrono::Local::now();
             let elapsed = current_time.signed_duration_since(request_time);
             if elapsed > time::Duration::seconds(self.config.max_age_seconds.unwrap()) {
-                println!("Rejecting old timestamp: {:?}", elapsed);
+                error!("Rejecting old timestamp: {:?}", elapsed);
                 return Err(SlackParserError::TimestampTooOld);
             }
         }
@@ -164,7 +166,7 @@ impl SlackRequestParser {
             hmac.input(basestring.as_bytes());
 
             if !crypto::util::fixed_time_eq(hmac.result().code(), &signature) {
-                println!("Rejecting bad signature");
+                error!("Rejecting bad signature");
                 return Err(SlackParserError::SignatureInvalid);
             }
         }

@@ -73,7 +73,6 @@ impl ChromeDriver {
         let ip = ips.first().ok_or_else(|| format_err!("Lookup failed"))?;
 
         let json_url = format!("http://{}:{}/json/list", ip, port);
-        println!("{}", json_url);
         let body = reqwest::get(json_url.as_str())?.text()?;
         let body: serde_json::Value = serde_json::from_str(&body)?;
         let list = body

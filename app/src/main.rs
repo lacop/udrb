@@ -1,7 +1,9 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
+extern crate env_logger;
 #[macro_use]
 extern crate failure;
+extern crate log;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
@@ -82,7 +84,9 @@ fn slash(
 }
 
 fn main() {
-    let config_state = config::ConfigState::from_evn().expect("Error obtaining config");
+    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    let config_state = config::ConfigState::from_env().expect("Error obtaining config");
 
     let sender = Renderer::start(&config_state.get()).expect("Failed to initialize renderer");
 
