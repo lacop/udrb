@@ -13,8 +13,11 @@ use std::io::Write;
 use websocket::client::sync::Client;
 use websocket::stream::sync::TcpStream;
 
+use log::info;
+
 pub struct ChromeDriver {
-    ws: Client<TcpStream>,
+    address: String,
+    ws: Option<Client<TcpStream>>,
     message_id: u32,
 }
 
@@ -61,13 +64,47 @@ fn write_text_to_directory(
 }
 
 impl ChromeDriver {
-    // TODO if chrome crashes we should dynamically restart it (with docker compose) and here we need
-    // to re-fetch the WS url
     pub fn new(address: &str) -> Result<ChromeDriver, failure::Error> {
+        let chrome = ChromeDriver {
+            address: address.to_string(),
+            ws: None,
+            message_id: 0,
+        };
+        // TODO proper await for events
+        // chrome.chrome_command("Page.setLifecycleEventsEnabled", json!({"enabled": false}))?;
+        Ok(chrome)
+    }
+
+    // Check if we can talk to chrome and try to reconnect if not.
+    // If chrome crashes in the background (sometimes happens for reason we don't understand) Docker will restart it,
+    // but the socket will be lost and we need to redo the connection.
+    fn maybe_connect(&mut self) -> Result<(), failure::Error> {
+        if self.ws.is_some() {
+            // If we have socket try to send arbitrary command to verify it is still alive.
+            let command = ChromeCommandRequest {
+                id: self.message_id,
+                method: "Browser.getVersion".to_string(),
+                params: serde_json::Value::Null,
+            };
+            self.message_id += 1;
+            let message = websocket::Message::text(serde_json::to_string(&command)?);
+            let send_result = self
+                .ws
+                .as_mut()
+                .ok_or(format_err!("Lost socket"))?
+                .send_message(&message);
+            if send_result.is_ok() {
+                // We managed to send something. Ignore the reply, just return as we have a valid connection.
+                return Ok(());
+            }
+        }
+        // If we have no socket or sending failed we need to establish new connection.
+        info!("Restarting chrome connection...");
+
         // Chrome only allows connection when the host header is either
         // localhost or IP, so the "chrome:port" value from docker compose
         // wouldn't work. Resolve to IP manually.
-        let address: Vec<_> = address.split(':').collect();
+        let address: Vec<_> = self.address.split(':').collect();
         let (hostname, port) = (address[0], address[1]);
         let ips = dns_lookup::lookup_host(hostname)?;
         let ip = ips.first().ok_or_else(|| format_err!("Lookup failed"))?;
@@ -83,14 +120,8 @@ impl ChromeDriver {
         let websocket_url = list[0]["webSocketDebuggerUrl"]
             .as_str()
             .ok_or_else(|| format_err!("Invalid websocket url"))?;
-        let ws = websocket::ClientBuilder::new(&websocket_url)?.connect_insecure()?;
-
-        let chrome = ChromeDriver { ws, message_id: 0 };
-
-        // TODO proper await for events
-        // chrome.chrome_command("Page.setLifecycleEventsEnabled", json!({"enabled": false}))?;
-
-        Ok(chrome)
+        self.ws = Some(websocket::ClientBuilder::new(&websocket_url)?.connect_insecure()?);
+        Ok(())
     }
 
     fn send_command(
@@ -101,12 +132,16 @@ impl ChromeDriver {
         let command = ChromeCommandRequest {
             id: self.message_id,
             method: method.to_string(),
-            params,
+            params: params,
         };
         self.message_id += 1;
-
         let message = websocket::Message::text(serde_json::to_string(&command)?);
+
+        // Check connection before sending to recover from previous crashes.
+        self.maybe_connect()?;
         self.ws
+            .as_mut()
+            .ok_or(format_err!("Lost socket"))?
             .send_message(&message)
             .map_err(|_| format_err!("Failed to send"))?;
         Ok(command.id)
@@ -119,7 +154,13 @@ impl ChromeDriver {
     ) -> Result<serde_json::Value, failure::Error> {
         let id = self.send_command(method, params)?;
         loop {
-            match self.ws.recv_message()? {
+            // If send_command was successful we should have a valid socket around.
+            match self
+                .ws
+                .as_mut()
+                .ok_or(format_err!("Lost socket"))?
+                .recv_message()?
+            {
                 websocket::OwnedMessage::Text(response) => {
                     let response: serde_json::Value = serde_json::from_str(&response)?;
                     if response["id"] != id {

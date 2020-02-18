@@ -175,14 +175,20 @@ impl Renderer {
             if request.slack_callback.is_some() {
                 let callback = request.slack_callback.as_ref().unwrap();
                 let slack_result = match result {
-                    Ok(r) => slack::post_success(callback, &r),
-                    Err(e) => slack::post_failure(callback, &e),
+                    Ok(r) => {
+                        info!("Request success: {:?}", r);
+                        slack::post_success(callback, &r)
+                    }
+                    Err(e) => {
+                        error!("Request failed: {:?}", e);
+                        slack::post_failure(callback, &e)
+                    }
                 };
                 if slack_result.is_err() {
                     error!("Slack posting failed: {:?}", slack_result.unwrap_err());
                 }
             } else {
-                error!("Request failed: {:?}", result.unwrap_err());
+                info!("No slack callback, result: {:?}", result);
             }
         }
     }

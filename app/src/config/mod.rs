@@ -4,8 +4,6 @@ use std::env;
 use std::str::FromStr;
 use std::sync::Mutex;
 
-use log::debug;
-
 #[derive(Debug, Clone)]
 pub struct DomainConfig {
     pub id: String,

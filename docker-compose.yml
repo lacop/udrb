@@ -27,3 +27,4 @@ services:
       - "9222:9222"
     environment:
       - CHROME_OPTS="--hide-scrollbars"
+    restart: on-failure
