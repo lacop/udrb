@@ -1,5 +1,1 @@
-/app/target/
-
-/config/config.toml
-
-/output/*
+target/
