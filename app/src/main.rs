@@ -51,8 +51,9 @@ fn fetch(
 ) -> Result<String, failure::Error> {
     let url = url::Url::parse(url.url_decode()?.as_str())?;
     let callback = callback
-        .map(|s| s.url_decode().ok())
-        .ok_or_else(|| format_err!("Invalid callback"))?;
+        .map(|s| s.url_decode().ok()
+        .ok_or_else(|| format_err!("Invalid callback"))
+    ).transpose()?;
 
     sender.render(RenderRequest {
         url: url.clone(),
