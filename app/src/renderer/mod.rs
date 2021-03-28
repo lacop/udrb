@@ -104,6 +104,12 @@ fn handle_request(
         .navigate(req.url.as_str())
         .map_err(wrap_internal_error)?;
 
+    if domain_config.render_script.is_some() {
+        chrome
+            .run_script(domain_config.render_script.as_ref().unwrap())
+            .map_err(wrap_internal_error)?;
+    }
+
     let title = chrome.get_title().map_err(wrap_internal_error)?;
 
     // TODO use uri! macro with proper input.

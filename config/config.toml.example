@@ -9,6 +9,7 @@ max_age_seconds = 600
 host = "example.com$"
 login_page = "http://example.com"
 login_script = "document.getElementById..."
+render_script = "..."
 
 [domain.another]
 host = "^another.example.com$"

@@ -10,6 +10,7 @@ pub struct DomainConfig {
     pub host_regex: regex::Regex,
     pub login_page: Option<String>,
     pub login_script: Option<String>,
+    pub render_script: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -54,6 +55,9 @@ impl ConfigState {
                     .map(|x| x.as_str().unwrap().to_string()),
                 login_script: table
                     .get("login_script")
+                    .map(|x| x.as_str().unwrap().to_string()),
+                render_script: table
+                    .get("render_script")
                     .map(|x| x.as_str().unwrap().to_string()),
             });
         }
