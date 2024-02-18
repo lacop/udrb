@@ -139,11 +139,11 @@ impl SlackRequestParser {
         let request = serde_qs::from_str(&data).map_err(|_| SlackParserError::BadQueryString)?;
 
         // Verify timestamp.
-        if self.config.max_age_seconds.is_some() {
+        if let Some(max_age_seconds) = self.config.max_age_seconds {
             let request_time = Utc.timestamp(self.timestamp, 0);
             let current_time = chrono::Local::now();
             let elapsed = current_time.signed_duration_since(request_time);
-            if elapsed > time::Duration::seconds(self.config.max_age_seconds.unwrap()) {
+            if elapsed > chrono::TimeDelta::seconds(max_age_seconds) {
                 error!("Rejecting old timestamp: {:?}", elapsed);
                 return Err(SlackParserError::TimestampTooOld);
             }
