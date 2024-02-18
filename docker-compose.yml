@@ -22,9 +22,7 @@ services:
         source: ./output
         target: /output
   chrome:
-    image: "alpeware/chrome-headless-trunk"
+    build: ./browser
     ports:
       - "9222:9222"
-    environment:
-      - CHROME_OPTS="--hide-scrollbars"
     restart: on-failure
