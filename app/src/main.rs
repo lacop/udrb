@@ -84,7 +84,7 @@ fn rocket() -> _ {
 
     rocket::build()
         .mount("/", rocket::routes![index])
-        .mount("/", rocket::fs::FileServer::from(config.output_dir))
+        .mount("/static", rocket::fs::FileServer::from(config.output_dir))
     //     rocket::ignite()
     //         .manage(config_state)
     //         .manage(sender)
