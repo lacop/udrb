@@ -10,11 +10,11 @@
 
 #[derive(Debug)]
 pub struct RenderRequest {
-    //     pub url: url::Url,
-    //     pub slack_callback: Option<String>,
-    //     pub user: Option<String>,
-    //     pub channel: Option<String>,
-    //     pub team: Option<String>,
+    pub url: url::Url,
+    pub slack_callback: String,
+    pub user: Option<String>,
+    pub channel: Option<String>,
+    pub team: Option<String>,
 }
 
 // // Send part of the render queue.

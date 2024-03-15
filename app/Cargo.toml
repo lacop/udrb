@@ -18,10 +18,10 @@ serde = { version = "1.0", features = ["derive"] }
 serde_qs = "0.12"
 serde_regex = "1.1"
 serde_yaml = "0.9"
+url = "2.5"
 
 # base64 = "0.10.1"
 # dns-lookup = "1.0.0"
 # time = "0.1.42"
 # reqwest = "0.9.11"
-# url = "1.7.2"
 # websocket = "0.22.3"

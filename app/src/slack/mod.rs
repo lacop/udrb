@@ -39,39 +39,32 @@ pub struct SlashRequest {
 
 impl SlashRequest {
     pub fn render_and_reply(self) -> (Option<RenderRequest>, SlackMessage) {
-        //         if self.command != "/udrb" {
-        //             return (
-        //                 None,
-        //                 SlackMessage::ephemeral("Unknown command. Use /udrb http://...".to_string()),
-        //             );
-        //         }
+        if self.command != "/udrb" {
+            return (
+                None,
+                SlackMessage::ephemeral("Unknown command. Use /udrb http://...".to_string()),
+            );
+        }
 
-        //         let url = url::Url::parse(&self.text).ok();
-        //         if url.is_none() {
-        //             return (
-        //                 None,
-        //                 SlackMessage::ephemeral("Invalid arguments. Use /udrb http://...".to_string()),
-        //             );
-        //         }
+        let url = match url::Url::parse(&self.text) {
+            Ok(url) => url,
+            Err(_) => {
+                return (
+                    None,
+                    SlackMessage::ephemeral("Invalid arguments. Use /udrb http://...".to_string()),
+                );
+            }
+        };
 
-        //         let request = RenderRequest {
-        //             url: url.unwrap(),
-        //             slack_callback: Some(self.response_url),
-        //             user: self.user_name,
-        //             channel: self.channel_name,
-        //             team: self.team_domain,
-        //         };
-        //         (
-        //             Some(request),
-        //             SlackMessage::ephemeral("Downloading...".to_string()),
-        //         )
         (
-            None,
-            SlackMessage {
-                response_type: SlackResponseType::Ephemeral,
-                text: "Downloading...".to_string(),
-                markdown: false,
-            },
+            Some(RenderRequest {
+                url,
+                slack_callback: self.response_url,
+                user: self.user_name,
+                channel: self.channel_name,
+                team: self.team_domain,
+            }),
+            SlackMessage::ephemeral("Downloading...".to_string()),
         )
     }
 }
@@ -91,15 +84,15 @@ pub struct SlackMessage {
     markdown: bool,
 }
 
-// impl SlackMessage {
-//     fn ephemeral(text: String) -> SlackMessage {
-//         SlackMessage {
-//             response_type: SlackResponseType::Ephemeral,
-//             text,
-//             markdown: false,
-//         }
-//     }
-// }
+impl SlackMessage {
+    fn ephemeral(text: String) -> SlackMessage {
+        SlackMessage {
+            response_type: SlackResponseType::Ephemeral,
+            text,
+            markdown: false,
+        }
+    }
+}
 
 pub struct SlackRequestParser {
     timestamp: i64,
