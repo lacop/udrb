@@ -11,7 +11,7 @@ pub struct DomainConfig {
     pub render_script: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SlackConfig {
     // If empty, requests are not authenticated.
     // TODO: Consider crashing if empty in production build...

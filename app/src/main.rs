@@ -16,16 +16,16 @@
 
 // mod chrome;
 mod config;
-// mod renderer;
-// mod slack;
+mod renderer;
+mod slack;
 
 // use renderer::{RenderRequest, RenderSender, Renderer};
-// use slack::{SlackMessage, SlackRequestParser};
+use slack::{SlackMessage, SlackRequestParser};
 
 // use rocket::data::Data;
 // use rocket::http::RawStr;
-// use rocket::response::status::BadRequest;
-// use rocket_contrib::json::Json;
+use rocket::response::status::BadRequest;
+use rocket::serde::json::Json;
 
 #[rocket::get("/")]
 fn index() -> &'static str {
@@ -56,35 +56,38 @@ fn index() -> &'static str {
 //     Ok(format!("Fetching {:?} in the background", url))
 // }
 
-// #[post("/slash", data = "<data>")]
-// fn slash(
-//     parser: SlackRequestParser,
-//     data: Data,
-//     sender: State<RenderSender>,
-// ) -> Result<Json<SlackMessage>, BadRequest<String>> {
-//     let request = parser
-//         .parse_slash(data)
-//         .map_err(|_| BadRequest(Some("Couldn't parse or verify request".to_string())))?;
-//     let (render_request, reply) = request.render_and_reply();
-//     if render_request.is_some() {
-//         sender
-//             .render(render_request.unwrap())
-//             .map_err(|_| BadRequest(Some("Internal error".to_string())))?;
-//     }
-//     Ok(Json(reply))
-// }
+#[rocket::post("/slash", data = "<data>")]
+fn slash(
+    parser: SlackRequestParser,
+    data: rocket::Data,
+    //sender: State<RenderSender>,
+) -> Result<Json<SlackMessage>, BadRequest<&'static str>> {
+    let request = parser
+        .parse_slash(data)
+        .map_err(|_| BadRequest("Couldn't parse or verify request"))?;
+    let (render_request, reply) = request.render_and_reply();
+    if render_request.is_some() {
+        // sender
+        //     .render(render_request.unwrap())
+        //     .map_err(|_| BadRequest(Some("Internal error".to_string())))?;
+    }
+    Ok(Json(reply))
+}
 
 #[rocket::launch]
 fn rocket() -> _ {
     //     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let config = config::Config::from_env().expect("Error obtaining config");
+    let output_dir = config.output_dir.clone();
 
     //     let sender = Renderer::start(&config_state.get()).expect("Failed to initialize renderer");
 
     rocket::build()
+        .manage(config)
         .mount("/", rocket::routes![index])
-        .mount("/static", rocket::fs::FileServer::from(config.output_dir))
+        .mount("/static", rocket::fs::FileServer::from(output_dir))
+        .mount("/slack", rocket::routes![slash])
     //     rocket::ignite()
     //         .manage(config_state)
     //         .manage(sender)
