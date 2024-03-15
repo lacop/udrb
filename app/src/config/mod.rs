@@ -10,18 +10,20 @@ use std::str::FromStr;
 //     pub render_script: Option<String>,
 // }
 
-// #[derive(Debug, Deserialize, Clone)]
-// pub struct SlackConfig {
-//     pub secret: Option<String>,
-//     pub max_age_seconds: Option<i64>,
-// }
+#[derive(Debug)]
+pub struct SlackConfig {
+    // If empty, requests are not authenticated.
+    // TODO: Consider crashing if empty in production build...
+    pub secret: Option<String>,
+    pub max_age_seconds: Option<i64>,
+}
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Config {
-    //     pub hostname: String,
+    pub hostname: String,
     pub output_dir: std::path::PathBuf,
-    //     pub chrome_address: String,
-    //     pub slack: SlackConfig,
+    pub chrome_address: String,
+    pub slack: SlackConfig,
     //     pub domains: Vec<DomainConfig>,
 }
 
@@ -31,13 +33,19 @@ fn get_env_var(name: &str) -> anyhow::Result<String> {
 }
 
 impl Config {
-    //     // TODO get rid of expect/unwrap? But crashing here is fine.
     pub fn from_env() -> anyhow::Result<Config> {
-        //         let hostname = env::var("HOSTNAME")?;
-        let output_dir = get_env_var("UDRB_OUTPUT")?;
-        //         let chrome_address = env::var("UDRB_CHROME_ADDRESS")?;
+        let hostname = get_env_var("UDRB_HOSTNAME")?;
+        let output_dir = get_env_var("UDRB_OUTPUT_DIR")?;
+        let chrome_address = get_env_var("UDRB_CHROME_ADDRESS")?;
 
-        //         let config_path = env::var("UDRB_CONFIG")?;
+        let slack = SlackConfig {
+            secret: get_env_var("UDRB_SLACK_SECRET").ok(),
+            max_age_seconds: get_env_var("UDRB_SLACK_MAX_AGE_SECONDS")
+                .ok()
+                .map(|x| x.parse::<i64>().unwrap()),
+        };
+
+        let config_path = get_env_var("UDRB_DOMAIN_CONFIG")?;
         //         let config = std::fs::read_to_string(config_path)?;
         //         let config: toml::Value = config.parse::<toml::Value>()?;
 
@@ -64,10 +72,10 @@ impl Config {
         //         let slack = config.get("slack").unwrap();
 
         Ok(Config {
-            //             hostname,
+            hostname,
             output_dir: std::path::PathBuf::from_str(&output_dir)?,
-            //             chrome_address,
-            //             slack: slack.clone().try_into().unwrap(),
+            chrome_address,
+            slack,
             //             domains,
         })
     }
