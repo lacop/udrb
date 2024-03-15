@@ -77,7 +77,7 @@ async fn slash(
 
 #[rocket::launch]
 fn rocket() -> _ {
-    //     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let config = config::Config::from_env().expect("Error obtaining config");
     let output_dir = config.output_dir.clone();
