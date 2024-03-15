@@ -1,0 +1,7 @@
+- name: Example
+  host: "example.com$" # Regular expression
+  login_page: "http://example.com"
+  login_script: "document.getElementById..."
+  render_script: "document.getElementById..."
+- name: Another
+  host: "^another.example.com$"
