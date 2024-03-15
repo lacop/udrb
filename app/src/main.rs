@@ -15,19 +15,16 @@
 // extern crate url;
 
 // mod chrome;
-// mod config;
+mod config;
 // mod renderer;
 // mod slack;
 
-// use config::ConfigState;
 // use renderer::{RenderRequest, RenderSender, Renderer};
 // use slack::{SlackMessage, SlackRequestParser};
 
 // use rocket::data::Data;
 // use rocket::http::RawStr;
 // use rocket::response::status::BadRequest;
-// use rocket::response::NamedFile;
-// use rocket::State;
 // use rocket_contrib::json::Json;
 
 #[rocket::get("/")]
@@ -35,13 +32,6 @@ fn index() -> &'static str {
     // TODO render index
     "UDRB is running..."
 }
-
-// #[get("/<file..>")]
-// fn static_file(file: std::path::PathBuf, config: State<ConfigState>) -> Option<NamedFile> {
-//     // TODO return correct headers for mhtml files
-//     let path = config.get().output_dir.join(file);
-//     NamedFile::open(path).ok()
-// }
 
 // #[get("/fetch?<url>&<callback>")]
 // fn fetch(
@@ -86,13 +76,15 @@ fn index() -> &'static str {
 
 #[rocket::launch]
 fn rocket() -> _ {
-    rocket::build().mount("/", rocket::routes![index])
     //     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    //     let config_state = config::ConfigState::from_env().expect("Error obtaining config");
+    let config = config::Config::from_env().expect("Error obtaining config");
 
     //     let sender = Renderer::start(&config_state.get()).expect("Failed to initialize renderer");
 
+    rocket::build()
+        .mount("/", rocket::routes![index])
+        .mount("/", rocket::fs::FileServer::from(config.output_dir))
     //     rocket::ignite()
     //         .manage(config_state)
     //         .manage(sender)
