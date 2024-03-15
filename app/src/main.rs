@@ -30,11 +30,11 @@
 // use rocket::State;
 // use rocket_contrib::json::Json;
 
-// #[get("/")]
-// fn index() -> &'static str {
-//     // TODO render index
-//     "UDRB is running..."
-// }
+#[rocket::get("/")]
+fn index() -> &'static str {
+    // TODO render index
+    "UDRB is running..."
+}
 
 // #[get("/<file..>")]
 // fn static_file(file: std::path::PathBuf, config: State<ConfigState>) -> Option<NamedFile> {
@@ -84,7 +84,9 @@
 //     Ok(Json(reply))
 // }
 
-fn main() {
+#[rocket::launch]
+fn rocket() -> _ {
+    rocket::build().mount("/", rocket::routes![index])
     //     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     //     let config_state = config::ConfigState::from_env().expect("Error obtaining config");
