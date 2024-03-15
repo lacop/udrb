@@ -1,6 +1,6 @@
 /app/target/
 
-/config/config.yaml
+/config/domains.yaml
 
 /output/*
 !/output/.keep

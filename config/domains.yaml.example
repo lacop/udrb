@@ -1,3 +1,4 @@
+# Copy this file into config/domains.yaml
 - name: Example
   host: "example.com$" # Regular expression
   login_page: "http://example.com"
