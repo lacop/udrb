@@ -19,25 +19,9 @@ serde_regex = "1.1"
 serde_yaml = "0.9"
 
 # base64 = "0.10.1"
-# chrono = "0.4.0"
 # dns-lookup = "1.0.0"
 # env_logger = "0.7.1"
-# failure = "0.1.5"
-# hex = "0.3.2"
-# log = "0.4.8"
-# rust-crypto ="0.2.36"
-# serde = "1.0"
-# serde_json = "1.0"
-# serde_derive = "1.0"
-# serde_qs = "0.4.5"
 # time = "0.1.42"
-# toml = "0.5.0"
 # reqwest = "0.9.11"
-# regex = "1.1.5"
 # url = "1.7.2"
 # websocket = "0.22.3"
-#
-# [dependencies.rocket_contrib]
-# version = "0.4.0"
-# default-features = false
-# features = ["json"]
