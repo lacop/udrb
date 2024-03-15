@@ -6,9 +6,15 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
+chrono = "0.4"
+constant_time_eq = "0.3"
+hex = "0.4"
+hmac-sha256 = "1.1"
+log = "0.4"
 regex = "1.10"
 rocket = { version = "0.5", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_qs = "0.12"
 serde_regex = "1.1"
 serde_yaml = "0.9"
 

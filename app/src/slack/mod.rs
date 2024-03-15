@@ -5,16 +5,16 @@
 // use crate::config::{ConfigState, SlackConfig};
 // use crate::renderer::{RenderError, RenderRequest, RenderResult};
 use crate::renderer::RenderRequest;
-// use chrono::{TimeZone, Utc};
+use chrono::{TimeZone, Utc};
 
 // use crypto::hmac::Hmac;
 // use crypto::mac::Mac;
 // use crypto::sha2::Sha256;
 
-// use log::error;
 use crate::config::{Config, SlackConfig};
+use log::error;
 
-use rocket::data::Data;
+use rocket::data::{Data, ToByteUnit};
 use rocket::http::Status;
 use rocket::request::Outcome;
 use rocket::request::{self, FromRequest, Request};
@@ -27,12 +27,14 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 pub struct SlashRequest {
-    // command: String,
-    // text: String,
-    // response_url: String,
-    // user_name: Option<String>,
-    // channel_name: Option<String>,
-    // team_domain: Option<String>,
+    command: String,
+    text: String,
+    response_url: String,
+    // TODO: Deprecated, use user_id and channel_id instead.
+    user_name: Option<String>,
+    channel_name: Option<String>,
+    // TODO: Not actually set?
+    team_domain: Option<String>,
 }
 
 impl SlashRequest {
@@ -110,7 +112,7 @@ pub enum SlackParserError {
     ConfigError,
     MissingHeaders,
     BadQueryString,
-    TimestampTooOld,
+    TimestampTooDifferent,
     SignatureInvalid,
 }
 
@@ -144,50 +146,55 @@ impl<'r> FromRequest<'r> for SlackRequestParser {
 }
 
 impl SlackRequestParser {
-    pub fn parse_slash(&self, raw_data: Data) -> Result<SlashRequest, SlackParserError> {
-        //         // TODO size limit here to avoid crashing?
-        //         let mut data = String::new();
-        //         raw_data
-        //             .open()
-        //             .read_to_string(&mut data)
-        //             .map_err(|_| SlackParserError::BadQueryString)?;
+    pub async fn parse_slash(&self, raw_data: Data<'_>) -> Result<SlashRequest, SlackParserError> {
+        let data = raw_data
+            // 10 KiB is enough for any reasonable request.
+            .open(10.kibibytes())
+            .into_string()
+            .await
+            .map_err(|_| SlackParserError::BadQueryString)?;
+        if !data.is_complete() {
+            return Err(SlackParserError::BadQueryString);
+        }
+        let request = serde_qs::from_str(&data).map_err(|_| SlackParserError::BadQueryString)?;
 
-        //         let request = serde_qs::from_str(&data).map_err(|_| SlackParserError::BadQueryString)?;
+        // Verify timestamp.
+        if let Some(max_age_seconds) = self.config.max_age_seconds {
+            let request_time = Utc
+                .timestamp_opt(self.timestamp, 0)
+                .single()
+                .ok_or(SlackParserError::BadQueryString)?;
+            let current_time = chrono::Local::now();
+            let difference = current_time.signed_duration_since(request_time).abs();
+            // TODO: Move this to config parsing, so we store TimeDelta and crash early.
+            if difference
+                > chrono::TimeDelta::try_seconds(max_age_seconds)
+                    .expect("Config max_age_seconds is invalid")
+            {
+                error!("Rejecting timestamp with large diff: {:?}", difference);
+                return Err(SlackParserError::TimestampTooDifferent);
+            }
+        }
 
-        //         // Verify timestamp.
-        //         if let Some(max_age_seconds) = self.config.max_age_seconds {
-        //             let request_time = Utc.timestamp(self.timestamp, 0);
-        //             let current_time = chrono::Local::now();
-        //             let elapsed = current_time.signed_duration_since(request_time);
-        //             if elapsed > chrono::TimeDelta::seconds(max_age_seconds) {
-        //                 error!("Rejecting old timestamp: {:?}", elapsed);
-        //                 return Err(SlackParserError::TimestampTooOld);
-        //             }
-        //         }
+        // Verify signature.
+        if let Some(ref secret) = self.config.secret {
+            // Remove the version prefix and parse as hex.
+            let signature = self.signature.trim_start_matches("v0=");
+            let signature: [u8; 32] = hex::decode(signature)
+                .map_err(|_| SlackParserError::SignatureInvalid)?
+                .try_into()
+                .map_err(|_| SlackParserError::SignatureInvalid)?;
 
-        //         // Verify signature.
-        //         if self.config.secret.is_some() {
-        //             // Remove the version prefix and parse as hex.
-        //             let signature = self.signature.trim_start_matches("v0=");
-        //             let signature =
-        //                 hex::decode(signature).map_err(|_| SlackParserError::SignatureInvalid)?;
+            // Concat version, timestamp and data for HMAC.
+            let basestring = format!("v0:{}:{}", self.timestamp, data.as_str());
+            let hmac = hmac_sha256::HMAC::mac(basestring, secret);
 
-        //             // Concat version, timestamp and data for hmac.
-        //             let basestring = format!("v0:{}:{}", self.timestamp, data);
+            if !constant_time_eq::constant_time_eq_n(&hmac, &signature) {
+                error!("Rejecting bad signature");
+                return Err(SlackParserError::SignatureInvalid);
+            }
+        }
 
-        //             let mut hmac = Hmac::new(
-        //                 Sha256::new(),
-        //                 self.config.secret.as_ref().unwrap().as_bytes(),
-        //             );
-        //             hmac.input(basestring.as_bytes());
-
-        //             if !crypto::util::fixed_time_eq(hmac.result().code(), &signature) {
-        //                 error!("Rejecting bad signature");
-        //                 return Err(SlackParserError::SignatureInvalid);
-        //             }
-        //         }
-
-        let request = SlashRequest {};
         Ok(request)
     }
 }

@@ -57,13 +57,14 @@ fn index() -> &'static str {
 // }
 
 #[rocket::post("/slash", data = "<data>")]
-fn slash(
+async fn slash(
     parser: SlackRequestParser,
-    data: rocket::Data,
+    data: rocket::Data<'_>,
     //sender: State<RenderSender>,
 ) -> Result<Json<SlackMessage>, BadRequest<&'static str>> {
     let request = parser
         .parse_slash(data)
+        .await
         .map_err(|_| BadRequest("Couldn't parse or verify request"))?;
     let (render_request, reply) = request.render_and_reply();
     if render_request.is_some() {
