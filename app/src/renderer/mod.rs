@@ -1,9 +1,9 @@
 // use crate::chrome::ChromeDriver;
-// use crate::config::Config;
+use crate::config::Config;
 // use crate::slack;
 
-// use std::sync::mpsc;
-// use std::sync::Mutex;
+use std::sync::mpsc;
+use std::sync::Mutex;
 // use std::thread;
 
 // use log::{error, info};
@@ -17,39 +17,39 @@ pub struct RenderRequest {
     pub team: Option<String>,
 }
 
-// // Send part of the render queue.
-// pub struct RenderSender(Mutex<mpsc::Sender<RenderRequest>>);
+// Send part of the render queue.
+pub struct RenderSender(Mutex<mpsc::Sender<RenderRequest>>);
 
-// impl RenderSender {
-//     // Enqueues the request.
-//     pub fn render(&self, request: RenderRequest) -> Result<(), failure::Error> {
-//         Ok(self.0.lock().unwrap().send(request)?)
-//     }
-// }
+impl RenderSender {
+    // Enqueues the request.
+    pub fn render(&self, request: RenderRequest) -> anyhow::Result<()> {
+        Ok(self.0.lock().unwrap().send(request)?)
+    }
+}
 
-// pub struct Renderer {
-//     config: Config,
-//     chrome: ChromeDriver,
-//     receiver: mpsc::Receiver<RenderRequest>,
-// }
+pub struct Renderer {
+    config: Config,
+    //     chrome: ChromeDriver,
+    receiver: mpsc::Receiver<RenderRequest>,
+}
 
-// #[derive(Debug)]
-// pub enum RenderError {
-//     InternalError(failure::Error),
-//     InvalidUrlError,
-//     UnsupportedDomain,
-// }
+#[derive(Debug)]
+pub enum RenderError {
+    InternalError(anyhow::Error),
+    InvalidUrlError,
+    UnsupportedDomain,
+}
 
-// impl std::fmt::Display for RenderError {
-//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-//         use RenderError::*;
-//         match self {
-//             InternalError(e) => write!(f, "Internal error ({:?})", e),
-//             InvalidUrlError => write!(f, "URL is not valid."),
-//             UnsupportedDomain => write!(f, "Domain is not supported."),
-//         }
-//     }
-// }
+impl std::fmt::Display for RenderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        use RenderError::*;
+        match self {
+            InternalError(e) => write!(f, "Internal error ({:?})", e),
+            InvalidUrlError => write!(f, "URL is not valid."),
+            UnsupportedDomain => write!(f, "Domain is not supported."),
+        }
+    }
+}
 
 // fn wrap_internal_error(e: failure::Error) -> RenderError {
 //     RenderError::InternalError(e)
@@ -145,57 +145,58 @@ pub struct RenderRequest {
 //     })
 // }
 
-// impl Renderer {
-//     pub fn start(config: &Config) -> Result<RenderSender, failure::Error> {
-//         // Render queue channel.
-//         let (sender, receiver) = mpsc::channel();
+impl Renderer {
+    pub fn start(config: &Config) -> anyhow::Result<RenderSender> {
+        // Render queue channel.
+        let (sender, receiver) = mpsc::channel();
 
-//         // Initialize Chrome driver.
-//         let chrome = ChromeDriver::new(&config.chrome_address)?;
+        // Initialize Chrome driver.
+        //let chrome = ChromeDriver::new(&config.chrome_address)?;
 
-//         let mut renderer = Renderer {
-//             config: config.clone(),
-//             chrome,
-//             receiver,
-//         };
+        let mut renderer = Renderer {
+            config: config.clone(),
+            //chrome,
+            receiver,
+        };
 
-//         // Start render loop.
-//         thread::spawn(move || renderer.render_loop());
+        // Start render loop.
+        std::thread::spawn(move || renderer.render_loop());
 
-//         // Return the sender for queueing RenderRequest.
-//         Ok(RenderSender(Mutex::new(sender)))
-//     }
+        // Return the sender for queueing RenderRequest.
+        Ok(RenderSender(Mutex::new(sender)))
+    }
 
-//     fn render_loop(&mut self) {
-//         for request in self.receiver.iter() {
-//             let unknown = "?".to_string();
-//             info!(
-//                 "Handling request from @{} in #{} ({}): {:?}",
-//                 request.user.as_ref().unwrap_or(&unknown),
-//                 request.channel.as_ref().unwrap_or(&unknown),
-//                 request.team.as_ref().unwrap_or(&unknown),
-//                 request.url
-//             );
-//             let result = handle_request(&request, &self.config, &mut self.chrome);
+    fn render_loop(&mut self) {
+        for request in self.receiver.iter() {
+            println!("{:?}", request);
+            //             let unknown = "?".to_string();
+            //             info!(
+            //                 "Handling request from @{} in #{} ({}): {:?}",
+            //                 request.user.as_ref().unwrap_or(&unknown),
+            //                 request.channel.as_ref().unwrap_or(&unknown),
+            //                 request.team.as_ref().unwrap_or(&unknown),
+            //                 request.url
+            //             );
+            //             let result = handle_request(&request, &self.config, &mut self.chrome);
 
-//             if request.slack_callback.is_some() {
-//                 let callback = request.slack_callback.as_ref().unwrap();
-//                 let slack_result = match result {
-//                     Ok(r) => {
-//                         info!("Request success: {:?}", r);
-//                         slack::post_success(callback, &r)
-//                     }
-//                     Err(e) => {
-//                         error!("Request failed: {:?}", e);
-//                         slack::post_failure(callback, &e)
-//                     }
-//                 };
-//                 if slack_result.is_err() {
-//                     error!("Slack posting failed: {:?}", slack_result.unwrap_err());
-//                 }
-//             } else {
-//                 info!("No slack callback, result: {:?}", result);
-//             }
-//         }
-//     }
-// }
+            //             if request.slack_callback.is_some() {
+            //                 let callback = request.slack_callback.as_ref().unwrap();
+            //                 let slack_result = match result {
+            //                     Ok(r) => {
+            //                         info!("Request success: {:?}", r);
+            //                         slack::post_success(callback, &r)
+            //                     }
+            //                     Err(e) => {
+            //                         error!("Request failed: {:?}", e);
+            //                         slack::post_failure(callback, &e)
+            //                     }
+            //                 };
+            //                 if slack_result.is_err() {
+            //                     error!("Slack posting failed: {:?}", slack_result.unwrap_err());
+            //                 }
+            //             } else {
+            //                 info!("No slack callback, result: {:?}", result);
+            //             }
+        }
+    }
+}

@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Deserialize)]
 pub struct DomainConfig {
     pub name: String,
     #[serde(with = "serde_regex")]
@@ -20,7 +20,8 @@ pub struct SlackConfig {
     pub max_age_seconds: Option<i64>,
 }
 
-#[derive(Debug)]
+// TODO: Maybe Arc would be better than cloning.
+#[derive(Clone, Debug)]
 pub struct Config {
     pub hostname: String,
     pub output_dir: std::path::PathBuf,

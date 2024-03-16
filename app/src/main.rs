@@ -3,7 +3,7 @@ mod config;
 mod renderer;
 mod slack;
 
-// use renderer::{RenderRequest, RenderSender, Renderer};
+use renderer::{RenderRequest, RenderSender, Renderer};
 use slack::{SlackMessage, SlackRequestParser};
 
 use rocket::response::status::BadRequest;
@@ -19,18 +19,18 @@ fn index() -> &'static str {
 async fn slash(
     parser: SlackRequestParser,
     data: rocket::Data<'_>,
-    //sender: State<RenderSender>,
+    sender: &rocket::State<RenderSender>,
 ) -> Result<Json<SlackMessage>, BadRequest<&'static str>> {
     let request = parser
         .parse_slash(data)
         .await
         .map_err(|_| BadRequest("Couldn't parse or verify request"))?;
     let (render_request, reply) = request.render_and_reply();
-    if render_request.is_some() {
+    if let Some(request) = render_request {
         // TODO: Use async MPSC?
-        // sender
-        //     .render(render_request.unwrap())
-        //     .map_err(|_| BadRequest(Some("Internal error".to_string())))?;
+        sender
+            .render(request)
+            .map_err(|_| BadRequest("Internal error"))?;
     }
     Ok(Json(reply))
 }
@@ -42,10 +42,11 @@ fn rocket() -> _ {
     let config = config::Config::from_env().expect("Error obtaining config");
     let output_dir = config.output_dir.clone();
 
-    //     let sender = Renderer::start(&config_state.get()).expect("Failed to initialize renderer");
+    let sender = Renderer::start(&config).expect("Failed to initialize renderer");
 
     rocket::build()
         .manage(config)
+        .manage(sender)
         .mount("/", rocket::routes![index])
         .mount("/static", rocket::fs::FileServer::from(output_dir))
         .mount("/slack", rocket::routes![slash])
