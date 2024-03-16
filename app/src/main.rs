@@ -1,4 +1,4 @@
-// mod chrome;
+mod chrome;
 mod config;
 mod renderer;
 mod slack;

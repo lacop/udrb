@@ -3,8 +3,7 @@
 // extern crate serde_qs;
 
 // use crate::config::{ConfigState, SlackConfig};
-// use crate::renderer::{RenderError, RenderRequest, RenderResult};
-use crate::renderer::RenderRequest;
+use crate::renderer::{RenderError, RenderRequest, RenderResult};
 use chrono::{TimeZone, Utc};
 
 // use crypto::hmac::Hmac;
@@ -20,7 +19,7 @@ use rocket::request::Outcome;
 use rocket::request::{self, FromRequest, Request};
 use rocket::State;
 
-// use std::fmt::Write;
+use std::fmt::Write;
 // use std::io::Read;
 
 use serde::{Deserialize, Serialize};
@@ -192,62 +191,63 @@ impl SlackRequestParser {
     }
 }
 
-// // From https://api.slack.com/docs/message-formatting
-// fn slack_encode(s: &str) -> String {
-//     s.replace("&", "&amp;")
-//         .replace("<", "&lt;")
-//         .replace(">", "&gt;")
-// }
+// From https://api.slack.com/docs/message-formatting
+fn slack_encode(s: &str) -> String {
+    s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+}
 
-// fn post_slack_message(callback: &str, message: SlackMessage) -> Result<(), failure::Error> {
-//     let client = reqwest::Client::new();
-//     let response = client.post(callback).json(&message).send()?;
-//     if !response.status().is_success() {
-//         return Err(format_err!("Request failed: {:?}", response));
-//     }
-//     Ok(())
-// }
+fn post_slack_message(callback: &str, message: SlackMessage) -> anyhow::Result<()> {
+    // let client = reqwest::Client::new();
+    // let response = client.post(callback).json(&message).send()?;
+    // if !response.status().is_success() {
+    //     return Err(format_err!("Request failed: {:?}", response));
+    // }
+    Ok(())
+}
 
-// pub fn post_success(callback: &str, result: &RenderResult) -> Result<(), failure::Error> {
-//     let mut text = String::new();
-//     if result.user.is_some() {
-//         writeln!(
-//             &mut text,
-//             ":bust_in_silhouette: {}",
-//             result.user.as_ref().unwrap()
-//         )
-//         .unwrap();
-//     }
-//     writeln!(
-//         &mut text,
-//         ":page_with_curl: *{}*",
-//         slack_encode(&result.title)
-//     )
-//     .unwrap();
-//     writeln!(&mut text, ":lock: <{}|Original link>", result.orig_url).unwrap();
-//     write!(&mut text, ":unlock: <{}|PDF version>", result.pdf_url).unwrap();
-//     if result.png_url.is_some() {
-//         write!(
-//             &mut text,
-//             "\n:camera: <{}|Screenshot>",
-//             result.png_url.as_ref().unwrap()
-//         )
-//         .unwrap();
-//     }
+// TODO: Replace with Block Kit (new fancy message format).
+pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()> {
+    let mut text = String::new();
+    if result.user.is_some() {
+        writeln!(
+            &mut text,
+            ":bust_in_silhouette: {}",
+            result.user.as_ref().unwrap()
+        )
+        .unwrap();
+    }
+    writeln!(
+        &mut text,
+        ":page_with_curl: *{}*",
+        slack_encode(&result.title)
+    )
+    .unwrap();
+    writeln!(&mut text, ":lock: <{}|Original link>", result.orig_url).unwrap();
+    write!(&mut text, ":unlock: <{}|PDF version>", result.pdf_url).unwrap();
+    if result.png_url.is_some() {
+        write!(
+            &mut text,
+            "\n:camera: <{}|Screenshot>",
+            result.png_url.as_ref().unwrap()
+        )
+        .unwrap();
+    }
 
-//     post_slack_message(
-//         callback,
-//         SlackMessage {
-//             response_type: SlackResponseType::InChannel,
-//             markdown: true,
-//             text,
-//         },
-//     )
-// }
+    post_slack_message(
+        callback,
+        SlackMessage {
+            response_type: SlackResponseType::InChannel,
+            markdown: true,
+            text,
+        },
+    )
+}
 
-// pub fn post_failure(callback: &str, error: &RenderError) -> Result<(), failure::Error> {
-//     post_slack_message(
-//         callback,
-//         SlackMessage::ephemeral(format!("Error downloading: {}", error)),
-//     )
-// }
+pub fn post_failure(callback: &str, error: &RenderError) -> anyhow::Result<()> {
+    post_slack_message(
+        callback,
+        SlackMessage::ephemeral(format!("Error downloading: {}", error)),
+    )
+}
