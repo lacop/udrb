@@ -28,15 +28,15 @@ fn write_bytes_to_directory(
     suffix: &str,
 ) -> anyhow::Result<String> {
     let mut hasher = sha3::Sha3_256::new();
-    hasher.update(&bytes);
+    hasher.update(bytes);
     let hash = hex::encode(hasher.finalize());
 
     let filename = hash + suffix;
     let output_path = dir.join(&filename);
 
     std::fs::create_dir_all(dir)?;
-    let mut buffer = File::create(&output_path)?;
-    buffer.write_all(&bytes)?;
+    let mut buffer = File::create(output_path)?;
+    buffer.write_all(bytes)?;
 
     Ok(filename)
 }
@@ -123,7 +123,7 @@ impl ChromeDriver {
         let websocket_url = list[0]["webSocketDebuggerUrl"]
             .as_str()
             .ok_or_else(|| format_err!("Invalid websocket url"))?;
-        self.ws = Some(websocket::ClientBuilder::new(&websocket_url)?.connect_insecure()?);
+        self.ws = Some(websocket::ClientBuilder::new(websocket_url)?.connect_insecure()?);
         Ok(())
     }
 

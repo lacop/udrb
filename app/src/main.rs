@@ -4,7 +4,6 @@ mod renderer;
 mod slack;
 
 use renderer::{RenderSender, Renderer};
-use rocket::data::ToByteUnit;
 use slack::{SlackMessage, SlackRequestParser};
 
 use rocket::response::status::BadRequest;
