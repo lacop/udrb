@@ -47,7 +47,9 @@ impl Config {
                 .as_deref()
                 .ok()
                 .or(Some("120"))
-                .map(str::parse::<i64>)
+                .map(str::parse::<u32>)
+                .and_then(Result::ok)
+                .map(u32::try_into)
                 .and_then(Result::ok)
                 .and_then(chrono::TimeDelta::try_seconds)
                 .expect("Config max_age_seconds is invalid"),
