@@ -71,7 +71,10 @@ impl ChromeDriver {
             message_id: 0,
         };
         // Connect to return error early if misconfigured.
-        chrome.maybe_connect()?;
+        // TODO: This can fail because chrome might not be ready yet on "docker compuse up".
+        // Retry a few times, or something?
+        // chrome.maybe_connect()?;
+
         // TODO proper await for events
         // chrome.chrome_command("Page.setLifecycleEventsEnabled", json!({"enabled": false}))?;
         Ok(chrome)
