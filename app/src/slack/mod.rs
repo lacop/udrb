@@ -1,23 +1,15 @@
-// use crate::config::{ConfigState, SlackConfig};
-use crate::renderer::{RenderError, RenderRequest, RenderResult};
-use chrono::{TimeZone, Utc};
-
-// use crypto::hmac::Hmac;
-// use crypto::mac::Mac;
-// use crypto::sha2::Sha256;
-
 use crate::config::{Config, SlackConfig};
-use log::error;
+use crate::renderer::{RenderError, RenderRequest, RenderResult};
 
+use std::fmt::Write;
+
+use chrono::{TimeZone, Utc};
+use log::error;
 use rocket::data::{Data, ToByteUnit};
 use rocket::http::Status;
 use rocket::request::Outcome;
 use rocket::request::{self, FromRequest, Request};
 use rocket::State;
-
-use std::fmt::Write;
-// use std::io::Read;
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
