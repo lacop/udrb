@@ -181,17 +181,17 @@ impl Renderer {
             let result = handle_request(&request, &self.config, &mut self.chrome);
 
             let slack_result = match result {
-                Ok(r) => {
-                    info!("Request success: {:?}", r);
-                    slack::post_success(&request.slack_callback, &r)
+                Ok(result) => {
+                    info!("Request success: {result:?}");
+                    slack::post_success(&request.slack_callback, &result)
                 }
-                Err(e) => {
-                    error!("Request failed: {:?}", e);
-                    slack::post_failure(&request.slack_callback, &e)
+                Err(err) => {
+                    error!("Request failed: {err:?}");
+                    slack::post_failure(&request.slack_callback, &err)
                 }
             };
-            if slack_result.is_err() {
-                error!("Slack posting failed: {:?}", slack_result.unwrap_err());
+            if let Err(err) = slack_result {
+                error!("Slack posting failed: {err:?}");
             }
         }
     }

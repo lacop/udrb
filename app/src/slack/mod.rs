@@ -1,7 +1,3 @@
-// extern crate chrono;
-// extern crate hex;
-// extern crate serde_qs;
-
 // use crate::config::{ConfigState, SlackConfig};
 use crate::renderer::{RenderError, RenderRequest, RenderResult};
 use chrono::{TimeZone, Utc};
@@ -199,11 +195,11 @@ fn slack_encode(s: &str) -> String {
 }
 
 fn post_slack_message(callback: &str, message: SlackMessage) -> anyhow::Result<()> {
-    // let client = reqwest::Client::new();
-    // let response = client.post(callback).json(&message).send()?;
-    // if !response.status().is_success() {
-    //     return Err(format_err!("Request failed: {:?}", response));
-    // }
+    let client = reqwest::blocking::Client::new();
+    let response = client.post(callback).json(&message).send()?;
+    if !response.status().is_success() {
+        return Err(anyhow::format_err!("Request failed: {:?}", response));
+    }
     Ok(())
 }
 

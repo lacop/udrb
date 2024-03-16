@@ -13,6 +13,7 @@ hex = "0.4"
 hmac-sha256 = "1.1"
 log = "0.4"
 regex = "1.10"
+reqwest = { version = "0.11", features = ["blocking", "json"] }
 rocket = { version = "0.5", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_qs = "0.12"
@@ -23,5 +24,4 @@ url = "2.5"
 # base64 = "0.10.1"
 # dns-lookup = "1.0.0"
 # time = "0.1.42"
-# reqwest = "0.9.11"
 # websocket = "0.22.3"
