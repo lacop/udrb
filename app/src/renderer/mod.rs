@@ -50,9 +50,9 @@ impl std::fmt::Display for RenderError {
     }
 }
 
-// fn wrap_internal_error(e: failure::Error) -> RenderError {
-//     RenderError::InternalError(e)
-// }
+fn wrap_internal_error(e: anyhow::Error) -> RenderError {
+    RenderError::InternalError(e)
+}
 
 #[derive(Debug)]
 pub struct RenderResult {
@@ -73,21 +73,15 @@ fn handle_request(
     config: &Config,
     chrome: &mut ChromeDriver,
 ) -> Result<RenderResult, RenderError> {
-    Err(RenderError::InternalError(anyhow::anyhow!(
-        "Not implemented"
-    )))
-    //     if req.url.scheme() != "http" && req.url.scheme() != "https" {
-    //         return Err(RenderError::InvalidUrlError);
-    //     }
-    //     let host = req.url.domain().ok_or(RenderError::InvalidUrlError)?;
-    //     let mut domain_config = None;
-    //     for dc in &config.domains {
-    //         if dc.host_regex.is_match(host) {
-    //             domain_config = Some(dc);
-    //             break;
-    //         }
-    //     }
-    //     let domain_config = domain_config.ok_or(RenderError::UnsupportedDomain)?;
+    if req.url.scheme() != "http" && req.url.scheme() != "https" {
+        return Err(RenderError::InvalidUrlError);
+    }
+    let host = req.url.domain().ok_or(RenderError::InvalidUrlError)?;
+    let domain_config = config
+        .domains
+        .iter()
+        .find(|dc| dc.host.is_match(host))
+        .ok_or(RenderError::UnsupportedDomain)?;
 
     //     // Navigate to login page and run login script if specified.
     //     if domain_config.login_page.is_some() {
@@ -101,10 +95,10 @@ fn handle_request(
     //             .map_err(wrap_internal_error)?;
     //     }
 
-    //     // Navigate to the requested content.
-    //     chrome
-    //         .navigate(req.url.as_str())
-    //         .map_err(wrap_internal_error)?;
+    // Navigate to the requested content.
+    chrome
+        .navigate(req.url.as_str())
+        .map_err(wrap_internal_error)?;
 
     //     if domain_config.render_script.is_some() {
     //         chrome
@@ -112,7 +106,7 @@ fn handle_request(
     //             .map_err(wrap_internal_error)?;
     //     }
 
-    //     let title = chrome.get_title().map_err(wrap_internal_error)?;
+    let title = chrome.get_title().map_err(wrap_internal_error)?;
 
     //     // TODO use uri! macro with proper input.
     //     let pdf_url = format!(
@@ -135,16 +129,15 @@ fn handle_request(
     //         .map(|path| format!("{}/static/{}", config.hostname, path));
 
     //     // TODO also do mhtml when content type is fixed
-
-    //     Ok(RenderResult {
-    //         title,
-    //         orig_url: req.url.as_str().to_string(),
-    //         pdf_url,
-    //         png_url,
-    //         user: req.user.as_ref().cloned(),
-    //         channel: req.channel.as_ref().cloned(),
-    //         team: req.team.as_ref().cloned(),
-    //     })
+    Ok(RenderResult {
+        title,
+        orig_url: req.url.as_str().to_string(),
+        pdf_url: "TODO".to_string(),
+        png_url: Some("TODO".to_string()),
+        user: req.user.as_ref().cloned(),
+        channel: req.channel.as_ref().cloned(),
+        team: req.team.as_ref().cloned(),
+    })
 }
 
 impl Renderer {

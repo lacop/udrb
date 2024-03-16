@@ -3,7 +3,7 @@ mod config;
 mod renderer;
 mod slack;
 
-use renderer::{RenderRequest, RenderSender, Renderer};
+use renderer::{RenderSender, Renderer};
 use slack::{SlackMessage, SlackRequestParser};
 
 use rocket::response::status::BadRequest;
