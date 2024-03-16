@@ -4,6 +4,7 @@ mod renderer;
 mod slack;
 
 use renderer::{RenderSender, Renderer};
+use rocket::data::ToByteUnit;
 use slack::{SlackMessage, SlackRequestParser};
 
 use rocket::response::status::BadRequest;
@@ -35,6 +36,15 @@ async fn slash(
     Ok(Json(reply))
 }
 
+// Using Block Kit with buttons requires an interactive endpoint to
+// be configured and return HTTP 200. Otherwise we get a warning next
+// to the message (the buttons still work, but it looks bad).
+// See https://github.com/slackapi/node-slack-sdk/issues/869.
+#[rocket::post("/interactive")]
+fn interactive() -> Result<(), ()> {
+    Ok(())
+}
+
 #[rocket::launch]
 fn rocket() -> _ {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -49,5 +59,5 @@ fn rocket() -> _ {
         .manage(sender)
         .mount("/", rocket::routes![index])
         .mount("/static", rocket::fs::FileServer::from(output_dir))
-        .mount("/slack", rocket::routes![slash])
+        .mount("/slack", rocket::routes![slash, interactive])
 }

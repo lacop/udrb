@@ -59,7 +59,7 @@ pub struct RenderResult {
     // Title of the document.
     pub title: String,
     // URLs to the original document and rendered versions.
-    pub orig_url: String,
+    pub orig_url: url::Url,
     pub pdf_url: String,
     pub png_url: Option<String>,
     // User, channel and team names.
@@ -124,7 +124,7 @@ fn handle_request(
     // TODO also do mhtml when content type is fixed
     Ok(RenderResult {
         title,
-        orig_url: req.url.as_str().to_string(),
+        orig_url: req.url.clone(),
         pdf_url: to_url(&pdf_file),
         png_url: png_file.as_deref().map(to_url).ok(),
         user: req.user.clone(),

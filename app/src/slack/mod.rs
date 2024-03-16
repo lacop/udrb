@@ -1,14 +1,13 @@
 use crate::config::{Config, SlackConfig};
 use crate::renderer::{RenderError, RenderRequest, RenderResult};
 
-use std::fmt::Write;
-
 use chrono::{TimeZone, Utc};
 use log::error;
 use rocket::data::{Data, ToByteUnit};
 use rocket::http::Status;
 use rocket::request::Outcome;
 use rocket::request::{self, FromRequest, Request};
+use rocket::serde::json;
 use rocket::State;
 use serde::{Deserialize, Serialize};
 
@@ -24,20 +23,27 @@ pub struct SlashRequest {
 
 impl SlashRequest {
     pub fn render_and_reply(self) -> (Option<RenderRequest>, SlackMessage) {
+        let usage = SlackMessage {
+            response_type: SlackResponseType::Ephemeral,
+            blocks: vec![SlackBlock {
+                type_: "context".to_string(),
+                elements: vec![SlackBlockElement {
+                    type_: "mrkdwn".to_string(),
+                    text: Some("Bad request. Usage: `/udrb http://...`".to_string()),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+        };
+
         if self.command != "/udrb" {
-            return (
-                None,
-                SlackMessage::ephemeral("Unknown command. Use /udrb http://...".to_string()),
-            );
+            return (None, usage);
         }
 
         let url = match url::Url::parse(&self.text) {
             Ok(url) => url,
             Err(_) => {
-                return (
-                    None,
-                    SlackMessage::ephemeral("Invalid arguments. Use /udrb http://...".to_string()),
-                );
+                return (None, usage);
             }
         };
 
@@ -49,7 +55,18 @@ impl SlashRequest {
                 channel: self.channel_name,
                 team: self.team_domain,
             }),
-            SlackMessage::ephemeral("Downloading...".to_string()),
+            SlackMessage {
+                response_type: SlackResponseType::Ephemeral,
+                blocks: vec![SlackBlock {
+                    type_: "context".to_string(),
+                    elements: vec![SlackBlockElement {
+                        type_: "mrkdwn".to_string(),
+                        text: Some("_Downloading, please wait..._".to_string()),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }],
+            },
         )
     }
 }
@@ -61,22 +78,60 @@ pub enum SlackResponseType {
     InChannel,
 }
 
+#[derive(Debug, Serialize, Default)]
+pub struct SlackBlock {
+    #[serde(rename = "type")]
+    type_: String,
+
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    elements: Vec<SlackBlockElement>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<SlackTextBlock>,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct SlackBlockElement {
+    #[serde(rename = "type")]
+    type_: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    image_url: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    alt_text: Option<String>,
+
+    // This is silly but Slack API has "text" be either string or nested message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "text")]
+    button_text: Option<SlackButtonText>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct SlackButtonText {
+    #[serde(rename = "type")]
+    type_: String,
+    text: String,
+    emoji: bool,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct SlackTextBlock {
+    #[serde(rename = "type")]
+    type_: String,
+    text: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct SlackMessage {
     response_type: SlackResponseType,
-    text: String,
-    #[serde(rename = "mrkdwn")]
-    markdown: bool,
-}
-
-impl SlackMessage {
-    fn ephemeral(text: String) -> SlackMessage {
-        SlackMessage {
-            response_type: SlackResponseType::Ephemeral,
-            text,
-            markdown: false,
-        }
-    }
+    blocks: Vec<SlackBlock>,
 }
 
 pub struct SlackRequestParser {
@@ -170,15 +225,9 @@ impl SlackRequestParser {
     }
 }
 
-// From https://api.slack.com/docs/message-formatting
-fn slack_encode(s: &str) -> String {
-    s.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-}
-
 fn post_slack_message(callback: &str, message: SlackMessage) -> anyhow::Result<()> {
     let client = reqwest::blocking::Client::new();
+    println!("{}", json::to_string(&message).unwrap());
     let response = client.post(callback).json(&message).send()?;
     if !response.status().is_success() {
         return Err(anyhow::format_err!("Request failed: {:?}", response));
@@ -188,28 +237,113 @@ fn post_slack_message(callback: &str, message: SlackMessage) -> anyhow::Result<(
 
 // TODO: Replace with Block Kit (new fancy message format).
 pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()> {
-    let mut text = String::new();
+    // let mut text = String::new();
+    // if let Some(ref user) = result.user {
+    //     writeln!(&mut text, ":bust_in_silhouette: <@{user}>").unwrap();
+    // }
+    // writeln!(
+    //     &mut text,
+    //     ":page_with_curl: *{}*",
+    //     slack_encode(&result.title)
+    // )
+    // .unwrap();
+    // writeln!(&mut text, ":lock: <{}|Original link>", result.orig_url).unwrap();
+    // write!(&mut text, ":unlock: <{}|PDF version>", result.pdf_url).unwrap();
+    // if let Some(ref png_url) = result.png_url {
+    //     write!(&mut text, "\n:camera: <{}|Screenshot>", png_url).unwrap();
+    // }
+
+    let mut response_blocks = Vec::new();
+
+    // Page favicon and user who requested it.
+    let mut favicon_and_user = SlackBlock {
+        type_: "context".to_string(),
+        elements: vec![],
+        ..Default::default()
+    };
+    if let Some(host) = result.orig_url.host_str() {
+        favicon_and_user.elements.push(SlackBlockElement {
+            type_: "image".to_string(),
+            image_url: Some(format!(
+                "{}://{}/favicon.ico",
+                result.orig_url.scheme(),
+                host
+            )),
+            alt_text: Some(host.to_owned()),
+            ..Default::default()
+        });
+    }
     if let Some(ref user) = result.user {
-        writeln!(&mut text, ":bust_in_silhouette: <@{user}>").unwrap();
+        favicon_and_user.elements.push(SlackBlockElement {
+            type_: "mrkdwn".to_string(),
+            text: Some(format!("Shared by <@{}>", user)),
+            ..Default::default()
+        });
     }
-    writeln!(
-        &mut text,
-        ":page_with_curl: *{}*",
-        slack_encode(&result.title)
-    )
-    .unwrap();
-    writeln!(&mut text, ":lock: <{}|Original link>", result.orig_url).unwrap();
-    write!(&mut text, ":unlock: <{}|PDF version>", result.pdf_url).unwrap();
+    if !favicon_and_user.elements.is_empty() {
+        response_blocks.push(favicon_and_user);
+    }
+
+    // Header with the page title.
+    response_blocks.push(SlackBlock {
+        type_: "header".to_string(),
+        text: Some(SlackTextBlock {
+            type_: "plain_text".to_string(),
+            text: result.title.clone(),
+        }),
+        ..Default::default()
+    });
+    // TODO: Maybe extract title from page, not <title>?
+    // TODO: Try extracting summary (first paragraph) to show here.
+    // TODO: Extract whole article without ads/menus etc ("reader view"),
+    //       use that to show the length / reading time, TTS narration, etc.
+
+    // Buttons with links to all the versions.
+    let mut buttons_block = SlackBlock {
+        type_: "actions".to_string(),
+        elements: vec![],
+        ..Default::default()
+    };
+    buttons_block.elements.push(SlackBlockElement {
+        type_: "button".to_string(),
+        button_text: Some(SlackButtonText {
+            type_: "plain_text".to_string(),
+            text: ":lock: Original".to_string(),
+            emoji: true,
+        }),
+        url: Some(result.orig_url.to_string()),
+        ..Default::default()
+    });
+    buttons_block.elements.push(SlackBlockElement {
+        type_: "button".to_string(),
+        button_text: Some(SlackButtonText {
+            type_: "plain_text".to_string(),
+            text: ":unlock: PDF".to_string(),
+            emoji: true,
+        }),
+        url: Some(result.pdf_url.to_string()),
+        ..Default::default()
+    });
     if let Some(ref png_url) = result.png_url {
-        write!(&mut text, "\n:camera: <{}|Screenshot>", png_url).unwrap();
+        buttons_block.elements.push(SlackBlockElement {
+            type_: "button".to_string(),
+            button_text: Some(SlackButtonText {
+                type_: "plain_text".to_string(),
+                text: ":camera: Screenshot".to_string(),
+                emoji: true,
+            }),
+            url: Some(png_url.to_string()),
+            ..Default::default()
+        });
     }
+
+    response_blocks.push(buttons_block);
 
     post_slack_message(
         callback,
         SlackMessage {
             response_type: SlackResponseType::InChannel,
-            markdown: true,
-            text,
+            blocks: response_blocks,
         },
     )
 }
@@ -217,6 +351,17 @@ pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()>
 pub fn post_failure(callback: &str, error: &RenderError) -> anyhow::Result<()> {
     post_slack_message(
         callback,
-        SlackMessage::ephemeral(format!("Error downloading: {}", error)),
+        SlackMessage {
+            response_type: SlackResponseType::Ephemeral,
+            blocks: vec![SlackBlock {
+                type_: "context".to_string(),
+                elements: vec![SlackBlockElement {
+                    type_: "mrkdwn".to_string(),
+                    text: Some(format!("Error downloading: {}", error)),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+        },
     )
 }
