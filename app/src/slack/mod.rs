@@ -137,21 +137,15 @@ impl SlackRequestParser {
         let request = serde_qs::from_str(&data).map_err(|_| SlackParserError::BadQueryString)?;
 
         // Verify timestamp.
-        if let Some(max_age_seconds) = self.config.max_age_seconds {
-            let request_time = Utc
-                .timestamp_opt(self.timestamp, 0)
-                .single()
-                .ok_or(SlackParserError::BadQueryString)?;
-            let current_time = chrono::Local::now();
-            let difference = current_time.signed_duration_since(request_time).abs();
-            // TODO: Move this to config parsing, so we store TimeDelta and crash early.
-            if difference
-                > chrono::TimeDelta::try_seconds(max_age_seconds)
-                    .expect("Config max_age_seconds is invalid")
-            {
-                error!("Rejecting timestamp with large diff: {:?}", difference);
-                return Err(SlackParserError::TimestampTooDifferent);
-            }
+        let request_time = Utc
+            .timestamp_opt(self.timestamp, 0)
+            .single()
+            .ok_or(SlackParserError::BadQueryString)?;
+        let current_time = chrono::Local::now();
+        let difference = current_time.signed_duration_since(request_time).abs();
+        if difference > self.config.max_age {
+            error!("Rejecting timestamp with large diff: {:?}", difference);
+            return Err(SlackParserError::TimestampTooDifferent);
         }
 
         // Verify signature.

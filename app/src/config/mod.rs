@@ -17,7 +17,7 @@ pub struct SlackConfig {
     // TODO: Consider crashing if empty in production build...
     // TODO: Wrap in SecretString to hide from debug.
     pub secret: Option<String>,
-    pub max_age_seconds: Option<i64>,
+    pub max_age: chrono::TimeDelta,
 }
 
 // TODO: Maybe Arc would be better than cloning.
@@ -43,9 +43,14 @@ impl Config {
 
         let slack = SlackConfig {
             secret: get_env_var("UDRB_SLACK_SECRET").ok(),
-            max_age_seconds: get_env_var("UDRB_SLACK_MAX_AGE_SECONDS")
+            max_age: get_env_var("UDRB_SLACK_MAX_AGE_SECONDS")
+                .as_deref()
                 .ok()
-                .map(|x| x.parse::<i64>().unwrap()),
+                .or(Some("120"))
+                .map(str::parse::<i64>)
+                .and_then(Result::ok)
+                .and_then(chrono::TimeDelta::try_seconds)
+                .expect("Config max_age_seconds is invalid"),
         };
 
         let domain_config_path = get_env_var("UDRB_DOMAIN_CONFIG")?;

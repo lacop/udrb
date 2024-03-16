@@ -131,7 +131,7 @@ impl ChromeDriver {
         let command = ChromeCommandRequest {
             id: self.message_id,
             method: method.to_string(),
-            params: params,
+            params,
         };
         self.message_id += 1;
         let message = websocket::Message::text(serde_json::to_string(&command)?);
