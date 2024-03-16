@@ -17,10 +17,8 @@ pub struct SlashRequest {
     command: String,
     text: String,
     response_url: String,
-    // TODO: Deprecated, use user_id and channel_id instead.
-    user_name: Option<String>,
+    user_id: Option<String>,
     channel_name: Option<String>,
-    // TODO: Not actually set?
     team_domain: Option<String>,
 }
 
@@ -47,7 +45,7 @@ impl SlashRequest {
             Some(RenderRequest {
                 url,
                 slack_callback: self.response_url,
-                user: self.user_name,
+                user: self.user_id,
                 channel: self.channel_name,
                 team: self.team_domain,
             }),
@@ -174,7 +172,6 @@ impl SlackRequestParser {
                 return Err(SlackParserError::SignatureInvalid);
             }
         }
-
         Ok(request)
     }
 }
@@ -198,13 +195,8 @@ fn post_slack_message(callback: &str, message: SlackMessage) -> anyhow::Result<(
 // TODO: Replace with Block Kit (new fancy message format).
 pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()> {
     let mut text = String::new();
-    if result.user.is_some() {
-        writeln!(
-            &mut text,
-            ":bust_in_silhouette: {}",
-            result.user.as_ref().unwrap()
-        )
-        .unwrap();
+    if let Some(ref user) = result.user {
+        writeln!(&mut text, ":bust_in_silhouette: <@{user}>").unwrap();
     }
     writeln!(
         &mut text,
@@ -214,13 +206,8 @@ pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()>
     .unwrap();
     writeln!(&mut text, ":lock: <{}|Original link>", result.orig_url).unwrap();
     write!(&mut text, ":unlock: <{}|PDF version>", result.pdf_url).unwrap();
-    if result.png_url.is_some() {
-        write!(
-            &mut text,
-            "\n:camera: <{}|Screenshot>",
-            result.png_url.as_ref().unwrap()
-        )
-        .unwrap();
+    if let Some(ref png_url) = result.png_url {
+        write!(&mut text, "\n:camera: <{}|Screenshot>", png_url).unwrap();
     }
 
     post_slack_message(
