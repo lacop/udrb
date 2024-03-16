@@ -1,22 +1,14 @@
-FROM rustlang/rust:nightly-slim
+ARG RUST_VERSION=1.76
+ARG ALPINE_VERSION=3.19
 
-# Needed to build some dependencies.
-RUN apt-get update && apt-get install -y pkg-config libssl-dev
-
-
-# Make a new project, copy over Cargo .toml & .lock and build to pull dependencies.
-RUN USER=root cargo new --bin app
+FROM rust:${RUST_VERSION}-alpine${ALPINE_VERSION} AS builder
+RUN apk add --no-cache musl-dev openssl-dev
+ENV RUSTFLAGS="-C target-feature=-crt-static"
 WORKDIR /app
-COPY ./app/Cargo.toml /app/
-COPY ./app/Cargo.lock /app/
+COPY ./ /app
 RUN cargo build --release
-RUN rm /app/src/*
 
-# Copy real source & build real app.
-COPY ./app/src /app/src
-RUN rm ./target/release/deps/app*
-RUN cargo install --path .
-
-EXPOSE 2021
-
-ENTRYPOINT ["app"]
+FROM alpine:${ALPINE_VERSION}
+RUN apk add --no-cache libgcc
+COPY --from=builder /app/target/release/app .
+ENTRYPOINT [ "/app" ]
