@@ -1,12 +1,11 @@
-// use crypto::digest::Digest;
-// use crypto::sha3::Sha3;
-
-// use std::fs::File;
-// use std::io::Write;
+use std::fs::File;
+use std::io::Write;
 
 use anyhow::format_err;
+use base64::Engine;
 use log::info;
 use serde_json::json;
+use sha3::Digest;
 use websocket::client::sync::Client;
 use websocket::stream::sync::TcpStream;
 
@@ -23,38 +22,39 @@ struct ChromeCommandRequest {
     params: serde_json::Value,
 }
 
-// fn write_bytes_to_directory(
-//     bytes: &[u8],
-//     dir: &std::path::Path,
-//     suffix: &str,
-// ) -> Result<String, failure::Error> {
-//     let mut hasher = Sha3::sha3_256();
-//     hasher.input(&bytes);
+fn write_bytes_to_directory(
+    bytes: &[u8],
+    dir: &std::path::Path,
+    suffix: &str,
+) -> anyhow::Result<String> {
+    let mut hasher = sha3::Sha3_256::new();
+    hasher.update(&bytes);
+    let hash = hex::encode(hasher.finalize());
 
-//     let filename = hasher.result_str() + suffix;
-//     let output_path = dir.join(&filename);
+    let filename = hash + suffix;
+    let output_path = dir.join(&filename);
 
-//     std::fs::create_dir_all(dir)?;
-//     let mut buffer = File::create(&output_path)?;
-//     buffer.write_all(&bytes)?;
+    std::fs::create_dir_all(dir)?;
+    let mut buffer = File::create(&output_path)?;
+    buffer.write_all(&bytes)?;
 
-//     Ok(filename)
-// }
+    Ok(filename)
+}
 
-// fn write_base64_to_directory(
-//     data: &str,
-//     dir: &std::path::Path,
-//     suffix: &str,
-// ) -> Result<String, failure::Error> {
-//     let bytes = base64::decode(data)?;
-//     write_bytes_to_directory(&bytes, dir, suffix)
-// }
+fn write_base64_to_directory(
+    data: &str,
+    dir: &std::path::Path,
+    suffix: &str,
+) -> anyhow::Result<String> {
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data)?;
+    write_bytes_to_directory(&bytes, dir, suffix)
+}
 
 // fn write_text_to_directory(
 //     data: &str,
 //     dir: &std::path::Path,
 //     suffix: &str,
-// ) -> Result<String, failure::Error> {
+// ) -> anyhow::Result<String> {
 //     write_bytes_to_directory(data.as_bytes(), dir, suffix)
 // }
 
@@ -182,41 +182,41 @@ impl ChromeDriver {
         Ok(())
     }
 
-    //     // TODO try to safeguard against too big pages with some hard limits
-    //     pub fn save_screenshot(&mut self, dir: &std::path::Path) -> Result<String, failure::Error> {
-    //         let result = self.get_result("Page.getLayoutMetrics", serde_json::Value::Null)?;
-    //         let width = result["contentSize"]["width"]
-    //             .as_i64()
-    //             .ok_or_else(|| format_err!("Missing dimension"))?;
-    //         let height = result["contentSize"]["height"]
-    //             .as_i64()
-    //             .ok_or_else(|| format_err!("Missing dimension"))?;
+    // TODO: Try to safeguard against too big pages with some hard limits.
+    pub fn save_screenshot(&mut self, dir: &std::path::Path) -> anyhow::Result<String> {
+        let result = self.get_result("Page.getLayoutMetrics", serde_json::Value::Null)?;
+        let width = result["contentSize"]["width"]
+            .as_i64()
+            .ok_or_else(|| format_err!("Missing dimension"))?;
+        let height = result["contentSize"]["height"]
+            .as_i64()
+            .ok_or_else(|| format_err!("Missing dimension"))?;
 
-    //         let params = json!({"width": width, "screenWidth": width,
-    //                             "height": height, "screenHeight": height,
-    //                             "scale": 1, "deviceScaleFactor": 1,
-    //                             "mobile": false});
-    //         let _ = self.get_result("Emulation.setDeviceMetricsOverride", params)?;
+        let params = json!({"width": width, "screenWidth": width,
+                                "height": height, "screenHeight": height,
+                                "scale": 1, "deviceScaleFactor": 1,
+                                "mobile": false});
+        let _ = self.get_result("Emulation.setDeviceMetricsOverride", params)?;
 
-    //         let params =
-    //             json!({"clip": {"x": 0, "y": 0, "width": width, "height": height, "scale": 1}});
-    //         let result = self.get_result("Page.captureScreenshot", params)?;
-    //         let data = result["data"]
-    //             .as_str()
-    //             .ok_or_else(|| format_err!("Missing data"))?;
-    //         write_base64_to_directory(data, dir, ".png")
-    //     }
+        let params =
+            json!({"clip": {"x": 0, "y": 0, "width": width, "height": height, "scale": 1}});
+        let result = self.get_result("Page.captureScreenshot", params)?;
+        let data = result["data"]
+            .as_str()
+            .ok_or_else(|| format_err!("Missing data"))?;
+        write_base64_to_directory(data, dir, ".png")
+    }
 
-    //     pub fn save_pdf(&mut self, dir: &std::path::Path) -> Result<String, failure::Error> {
-    //         // A4 paper size in inches.
-    //         let params =
-    //             json!({"landscape": false, "scale": 1, "paperWidth": 8.27, "paperHeight": 11.69});
-    //         let result = self.get_result("Page.printToPDF", params)?;
-    //         let data = result["data"]
-    //             .as_str()
-    //             .ok_or_else(|| format_err!("Missing data"))?;
-    //         write_base64_to_directory(data, dir, ".pdf")
-    //     }
+    pub fn save_pdf(&mut self, dir: &std::path::Path) -> anyhow::Result<String> {
+        // A4 paper size in inches.
+        let params =
+            json!({"landscape": false, "scale": 1, "paperWidth": 8.27, "paperHeight": 11.69});
+        let result = self.get_result("Page.printToPDF", params)?;
+        let data = result["data"]
+            .as_str()
+            .ok_or_else(|| format_err!("Missing data"))?;
+        write_base64_to_directory(data, dir, ".pdf")
+    }
 
     //     pub fn save_mhtml(&mut self, dir: &std::path::Path) -> Result<String, failure::Error> {
     //         let result = self.get_result("Page.captureSnapshot", serde_json::Value::Null)?;
@@ -226,13 +226,13 @@ impl ChromeDriver {
     //         write_text_to_directory(data, dir, ".mhtml")
     //     }
 
-    //     pub fn run_script(&mut self, script: &str) -> Result<(), failure::Error> {
-    //         let params = json!({"expression": script, "returnByValue": false});
-    //         let _result = self.get_result("Runtime.evaluate", params)?;
-    //         // TODO avoid sleep by handling the result somehow?
-    //         std::thread::sleep(std::time::Duration::from_secs(3));
-    //         Ok(())
-    //     }
+    pub fn run_script(&mut self, script: &str) -> anyhow::Result<()> {
+        let params = json!({"expression": script, "returnByValue": false});
+        let _result = self.get_result("Runtime.evaluate", params)?;
+        // TODO avoid sleep by handling the result somehow?
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        Ok(())
+    }
 
     pub fn get_title(&mut self) -> anyhow::Result<String> {
         let params = json!({"expression": "document.title", "returnByValue": true});

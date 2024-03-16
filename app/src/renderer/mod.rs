@@ -83,60 +83,53 @@ fn handle_request(
         .find(|dc| dc.host.is_match(host))
         .ok_or(RenderError::UnsupportedDomain)?;
 
-    //     // Navigate to login page and run login script if specified.
-    //     if domain_config.login_page.is_some() {
-    //         chrome
-    //             .navigate(domain_config.login_page.as_ref().unwrap())
-    //             .map_err(wrap_internal_error)?;
-    //     }
-    //     if domain_config.login_script.is_some() {
-    //         chrome
-    //             .run_script(domain_config.login_script.as_ref().unwrap())
-    //             .map_err(wrap_internal_error)?;
-    //     }
+    // Navigate to login page and run login script if specified.
+    if let Some(ref login_page) = domain_config.login_page {
+        chrome.navigate(login_page).map_err(wrap_internal_error)?;
+    }
+    if let Some(ref login_script) = domain_config.login_script {
+        chrome
+            .run_script(login_script)
+            .map_err(wrap_internal_error)?;
+    }
 
     // Navigate to the requested content.
     chrome
         .navigate(req.url.as_str())
         .map_err(wrap_internal_error)?;
 
-    //     if domain_config.render_script.is_some() {
-    //         chrome
-    //             .run_script(domain_config.render_script.as_ref().unwrap())
-    //             .map_err(wrap_internal_error)?;
-    //     }
+    if let Some(ref render_script) = domain_config.render_script {
+        chrome
+            .run_script(render_script)
+            .map_err(wrap_internal_error)?;
+    }
 
     let title = chrome.get_title().map_err(wrap_internal_error)?;
 
-    //     // TODO use uri! macro with proper input.
-    //     let pdf_url = format!(
-    //         "{}/static/{}",
-    //         config.hostname,
-    //         chrome
-    //             .save_pdf(config.output_dir.as_path())
-    //             .map_err(wrap_internal_error)?
-    //     );
+    // TODO use uri! macro with proper input.
+    let to_url = |filename: &str| format!("{}/static/{}", config.hostname, filename);
 
-    //     // TODO for now screenshot is optional and ignored when it fails
-    //     let screenshot_result = chrome
-    //         .save_screenshot(config.output_dir.as_path())
-    //         .map_err(wrap_internal_error);
-    //     if screenshot_result.is_err() {
-    //         error!("Screenshot failed: {:?}", screenshot_result);
-    //     }
-    //     let png_url = screenshot_result
-    //         .ok()
-    //         .map(|path| format!("{}/static/{}", config.hostname, path));
+    let pdf_file = chrome
+        .save_pdf(config.output_dir.as_path())
+        .map_err(wrap_internal_error)?;
 
-    //     // TODO also do mhtml when content type is fixed
+    // TODO for now screenshot is optional and ignored when it fails
+    let png_file = chrome
+        .save_screenshot(config.output_dir.as_path())
+        .map_err(wrap_internal_error);
+    if png_file.is_err() {
+        error!("Screenshot failed: {png_file:?}");
+    }
+
+    // TODO also do mhtml when content type is fixed
     Ok(RenderResult {
         title,
         orig_url: req.url.as_str().to_string(),
-        pdf_url: "TODO".to_string(),
-        png_url: Some("TODO".to_string()),
-        user: req.user.as_ref().cloned(),
-        channel: req.channel.as_ref().cloned(),
-        team: req.team.as_ref().cloned(),
+        pdf_url: to_url(&pdf_file),
+        png_url: png_file.as_deref().map(to_url).ok(),
+        user: req.user.clone(),
+        channel: req.channel.clone(),
+        team: req.team.clone(),
     })
 }
 
