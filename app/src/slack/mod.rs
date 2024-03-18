@@ -269,6 +269,35 @@ pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()>
     // TODO: Extract whole article without ads/menus etc ("reader view"),
     //       use that to show the length / reading time, TTS narration, etc.
 
+    // Page favicon and user who requested it.
+    let mut favicon_and_user = SlackBlock {
+        type_: "context".to_string(),
+        elements: vec![],
+        ..Default::default()
+    };
+    if let Some(host) = result.orig_url.host_str() {
+        favicon_and_user.elements.push(SlackBlockElement {
+            type_: "image".to_string(),
+            image_url: Some(format!(
+                "{}://{}/favicon.ico",
+                result.orig_url.scheme(),
+                host
+            )),
+            alt_text: Some(host.to_owned()),
+            ..Default::default()
+        });
+    }
+    if let Some(ref user) = result.user {
+        favicon_and_user.elements.push(SlackBlockElement {
+            type_: "mrkdwn".to_string(),
+            text: Some(format!("Shared by <@{}>", user)),
+            ..Default::default()
+        });
+    }
+    if !favicon_and_user.elements.is_empty() {
+        response_blocks.push(favicon_and_user);
+    }
+
     // Buttons with links to all the versions.
     let mut buttons_block = SlackBlock {
         type_: "actions".to_string(),
@@ -314,7 +343,7 @@ pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()>
             type_: "button".to_string(),
             button_text: Some(SlackButtonText {
                 type_: "plain_text".to_string(),
-                text: ":floppy_disk: Archive (experimental :test_tube:)".to_string(),
+                text: ":floppy_disk: Archive (experimental)".to_string(),
                 emoji: true,
             }),
             url: Some(mhtml_url.to_string()),
@@ -322,35 +351,6 @@ pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()>
         });
     }
     response_blocks.push(buttons_block);
-
-    // Page favicon and user who requested it.
-    let mut favicon_and_user = SlackBlock {
-        type_: "context".to_string(),
-        elements: vec![],
-        ..Default::default()
-    };
-    if let Some(host) = result.orig_url.host_str() {
-        favicon_and_user.elements.push(SlackBlockElement {
-            type_: "image".to_string(),
-            image_url: Some(format!(
-                "{}://{}/favicon.ico",
-                result.orig_url.scheme(),
-                host
-            )),
-            alt_text: Some(host.to_owned()),
-            ..Default::default()
-        });
-    }
-    if let Some(ref user) = result.user {
-        favicon_and_user.elements.push(SlackBlockElement {
-            type_: "mrkdwn".to_string(),
-            text: Some(format!("Shared by <@{}>", user)),
-            ..Default::default()
-        });
-    }
-    if !favicon_and_user.elements.is_empty() {
-        response_blocks.push(favicon_and_user);
-    }
 
     post_slack_message(
         callback,
