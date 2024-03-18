@@ -127,7 +127,6 @@ fn handle_request(
             "Failed to capture either PDF or screenshot"
         )));
     }
-
     Ok(RenderResult {
         title,
         orig_url: req.url.clone(),

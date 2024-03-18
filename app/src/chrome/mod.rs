@@ -3,7 +3,7 @@ use std::io::Write;
 
 use anyhow::format_err;
 use base64::Engine;
-use log::info;
+use log::{info, warn};
 use serde_json::json;
 use sha3::Digest;
 use websocket::client::sync::Client;
@@ -22,23 +22,10 @@ struct ChromeCommandRequest {
     params: serde_json::Value,
 }
 
-fn write_bytes_to_directory(
-    bytes: &[u8],
-    dir: &std::path::Path,
-    suffix: &str,
-) -> anyhow::Result<String> {
+fn bytes_to_hash(bytes: &[u8]) -> String {
     let mut hasher = sha3::Sha3_256::new();
     hasher.update(bytes);
-    let hash = hex::encode(hasher.finalize());
-
-    let filename = hash + suffix;
-    let output_path = dir.join(&filename);
-
-    std::fs::create_dir_all(dir)?;
-    let mut buffer = File::create(output_path)?;
-    buffer.write_all(bytes)?;
-
-    Ok(filename)
+    hex::encode(hasher.finalize())
 }
 
 fn write_base64_to_directory(
@@ -47,15 +34,147 @@ fn write_base64_to_directory(
     suffix: &str,
 ) -> anyhow::Result<String> {
     let bytes = base64::engine::general_purpose::STANDARD.decode(data)?;
-    write_bytes_to_directory(&bytes, dir, suffix)
+    let filename = bytes_to_hash(&bytes) + suffix;
+    let output_path = dir.join(&filename);
+
+    std::fs::create_dir_all(dir)?;
+    let mut buffer = File::create(output_path)?;
+    buffer.write_all(&bytes)?;
+
+    Ok(filename)
 }
 
-fn write_text_to_directory(
-    data: &str,
-    dir: &std::path::Path,
-    suffix: &str,
-) -> anyhow::Result<String> {
-    write_bytes_to_directory(data.as_bytes(), dir, suffix)
+fn get_extension(headers: &[mail_parser::Header]) -> Option<&'static str> {
+    for header in headers {
+        if header.name != mail_parser::HeaderName::ContentType {
+            continue;
+        }
+        let content_type = match &header.value {
+            mail_parser::HeaderValue::ContentType(ct) => ct,
+            _ => {
+                warn!("Invalid content type {:?}", header);
+                continue;
+            }
+        };
+        match (content_type.ctype(), content_type.subtype()) {
+            ("text", Some("html")) => return Some("html"),
+            ("text", Some("css")) => return Some("css"),
+            ("text", Some("javascript")) => return Some("js"),
+            ("image", Some("jpeg")) => return Some("jpg"),
+            ("image", Some("png")) => return Some("png"),
+            ("image", Some("gif")) => return Some("gif"),
+            ("image", Some("bmp")) => return Some("bmp"),
+            ("image", Some("svg+xml")) => return Some("svg"),
+            ("image", Some("webp")) => return Some("webp"),
+            ("application", Some("pdf")) => return Some("pdf"),
+            _ => {
+                warn!("Unknown content type {:?}", content_type);
+                return None;
+            }
+        }
+    }
+    None
+}
+
+fn get_content_location(headers: &[mail_parser::Header]) -> Option<String> {
+    // Content-ID first as Chrome has replaced the href/src with "cid:...".
+    for header in headers {
+        if header.name != mail_parser::HeaderName::ContentId {
+            continue;
+        }
+        return match &header.value {
+            mail_parser::HeaderValue::Text(t) => {
+                let t = t.trim_start_matches('<').trim_end_matches('>');
+                Some(format!("cid:{}", t))
+            }
+            _ => {
+                warn!("Invalid content id {:?}", header);
+                None
+            }
+        };
+    }
+    // Fall back to Content-Location if Content-ID is missing.
+    for header in headers {
+        if header.name != mail_parser::HeaderName::ContentLocation {
+            continue;
+        }
+        return match &header.value {
+            mail_parser::HeaderValue::Text(t) => Some(t.to_string()),
+            _ => {
+                warn!("Invalid content location {:?}", header);
+                None
+            }
+        };
+    }
+    None
+}
+
+fn write_mhtml_to_directory(data: &str, dir: &std::path::Path) -> anyhow::Result<String> {
+    let message = mail_parser::MessageParser::default()
+        .parse(data.as_bytes())
+        .ok_or(format_err!("Failed to parse mhtml"))?;
+
+    // At least two parts: First is the header, second is the downloaded page itself.
+    anyhow::ensure!(message.parts.len() >= 2, "Too few parts in mhtml");
+    anyhow::ensure!(
+        matches!(message.parts[0].body, mail_parser::PartType::Multipart(_)),
+        "First part is not multipart"
+    );
+
+    // Ensure output directory exists.
+    let hash = bytes_to_hash(data.as_bytes());
+    let dir = dir.join(&hash);
+    std::fs::create_dir_all(&dir)?;
+
+    // Dump the raw MHTML for potential debugging.
+    {
+        let mut file = File::create(dir.join("raw.mhtml"))?;
+        file.write_all(data.as_bytes())?;
+        info!("Wrote {}/raw.mhtml", hash);
+    }
+
+    // Write out all the parts except the first one, and remember the filenames.
+    let mut part_filenames = std::collections::HashMap::new();
+    for part in &message.parts[2..] {
+        let filename = format!(
+            "{}.{}",
+            part_filenames.len() + 1,
+            get_extension(&part.headers).ok_or(anyhow::format_err!("Unknown content type"))?
+        );
+        let path = dir.join(&filename);
+        let content_location = match get_content_location(&part.headers) {
+            Some(cl) => dbg!(cl),
+            None => {
+                // Some stuff  might be missing Content-Location, ignore it.
+                println!("no content_location {:?}", part.headers);
+                continue;
+            }
+        };
+        part_filenames.insert(content_location, filename);
+
+        let mut file = File::create(path)?;
+        match &part.body {
+            mail_parser::PartType::Text(text) => file.write_all(text.as_bytes())?,
+            mail_parser::PartType::Html(text) => file.write_all(text.as_bytes())?,
+            mail_parser::PartType::Binary(data) => file.write_all(data)?,
+            _ => return Err(format_err!("Unexpected body")),
+        }
+    }
+
+    // Write out the index.html file with the correct references to the other files.
+    let index_path = dir.join("index.html");
+    let mut index_file = File::create(&index_path)?;
+    if let mail_parser::PartType::Html(html) = &message.parts[1].body {
+        let mut html = html.to_string();
+        for (content_location, filename) in part_filenames {
+            html = html.replace(&content_location, &filename);
+        }
+        index_file.write_all(html.as_bytes())?;
+    } else {
+        return Err(format_err!("Unexpected body for index"));
+    }
+
+    Ok(format!("{}/index.html", hash))
 }
 
 // TODO: Rewrite in a way that is robust to Chrome hanging or dieing. Something like:
@@ -65,14 +184,14 @@ fn write_text_to_directory(
 //   the chrome connection from it should return error and let the thread die.
 impl ChromeDriver {
     pub fn new(address: &str) -> anyhow::Result<ChromeDriver> {
-        let mut chrome = ChromeDriver {
+        let chrome = ChromeDriver {
             address: address.to_string(),
             ws: None,
             message_id: 0,
         };
         // Connect to return error early if misconfigured.
         // TODO: This can fail because chrome might not be ready yet on "docker compuse up".
-        // Retry a few times, or something?
+        //       Retry a few times, or something?
         // chrome.maybe_connect()?;
 
         // TODO proper await for events
@@ -226,7 +345,7 @@ impl ChromeDriver {
         let data = result["data"]
             .as_str()
             .ok_or_else(|| format_err!("Missing data"))?;
-        write_text_to_directory(data, dir, ".mhtml")
+        write_mhtml_to_directory(data, dir)
     }
 
     pub fn run_script(&mut self, script: &str) -> anyhow::Result<()> {

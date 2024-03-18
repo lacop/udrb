@@ -14,6 +14,7 @@ env_logger = "0.11"
 hex = "0.4"
 hmac-sha256 = "1.1"
 log = "0.4"
+mail-parser = "0.9"
 regex = "1.10"
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 rocket = { version = "0.5", features = ["json"] }
