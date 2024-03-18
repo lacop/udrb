@@ -1,6 +1,4 @@
 /app/target/
 
-/config/config.toml
-
 /output/*
 !/output/.keep

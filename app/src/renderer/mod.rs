@@ -4,14 +4,13 @@ use crate::slack;
 
 use std::sync::mpsc;
 use std::sync::Mutex;
-use std::thread;
 
 use log::{error, info};
 
 #[derive(Debug)]
 pub struct RenderRequest {
     pub url: url::Url,
-    pub slack_callback: Option<String>,
+    pub slack_callback: String,
     pub user: Option<String>,
     pub channel: Option<String>,
     pub team: Option<String>,
@@ -22,7 +21,7 @@ pub struct RenderSender(Mutex<mpsc::Sender<RenderRequest>>);
 
 impl RenderSender {
     // Enqueues the request.
-    pub fn render(&self, request: RenderRequest) -> Result<(), failure::Error> {
+    pub fn render(&self, request: RenderRequest) -> anyhow::Result<()> {
         Ok(self.0.lock().unwrap().send(request)?)
     }
 }
@@ -35,7 +34,7 @@ pub struct Renderer {
 
 #[derive(Debug)]
 pub enum RenderError {
-    InternalError(failure::Error),
+    InternalError(anyhow::Error),
     InvalidUrlError,
     UnsupportedDomain,
 }
@@ -51,7 +50,8 @@ impl std::fmt::Display for RenderError {
     }
 }
 
-fn wrap_internal_error(e: failure::Error) -> RenderError {
+fn wrap_internal_error(e: anyhow::Error) -> RenderError {
+    log::warn!("Internal error: {:?}", e);
     RenderError::InternalError(e)
 }
 
@@ -60,9 +60,10 @@ pub struct RenderResult {
     // Title of the document.
     pub title: String,
     // URLs to the original document and rendered versions.
-    pub orig_url: String,
-    pub pdf_url: String,
+    pub orig_url: url::Url,
+    pub pdf_url: Option<String>,
     pub png_url: Option<String>,
+    pub mhtml_url: Option<String>,
     // User, channel and team names.
     pub user: Option<String>,
     pub channel: Option<String>,
@@ -78,24 +79,19 @@ fn handle_request(
         return Err(RenderError::InvalidUrlError);
     }
     let host = req.url.domain().ok_or(RenderError::InvalidUrlError)?;
-    let mut domain_config = None;
-    for dc in &config.domains {
-        if dc.host_regex.is_match(host) {
-            domain_config = Some(dc);
-            break;
-        }
-    }
-    let domain_config = domain_config.ok_or(RenderError::UnsupportedDomain)?;
+    let domain_config = config
+        .domains
+        .iter()
+        .find(|dc| dc.host.is_match(host))
+        .ok_or(RenderError::UnsupportedDomain)?;
 
     // Navigate to login page and run login script if specified.
-    if domain_config.login_page.is_some() {
-        chrome
-            .navigate(domain_config.login_page.as_ref().unwrap())
-            .map_err(wrap_internal_error)?;
+    if let Some(ref login_page) = domain_config.login_page {
+        chrome.navigate(login_page).map_err(wrap_internal_error)?;
     }
-    if domain_config.login_script.is_some() {
+    if let Some(ref login_script) = domain_config.login_script {
         chrome
-            .run_script(domain_config.login_script.as_ref().unwrap())
+            .run_script(login_script)
             .map_err(wrap_internal_error)?;
     }
 
@@ -104,49 +100,47 @@ fn handle_request(
         .navigate(req.url.as_str())
         .map_err(wrap_internal_error)?;
 
-    if domain_config.render_script.is_some() {
+    if let Some(ref render_script) = domain_config.render_script {
         chrome
-            .run_script(domain_config.render_script.as_ref().unwrap())
+            .run_script(render_script)
             .map_err(wrap_internal_error)?;
     }
 
     let title = chrome.get_title().map_err(wrap_internal_error)?;
 
-    // TODO use uri! macro with proper input.
-    let pdf_url = format!(
-        "{}/static/{}",
-        config.hostname,
-        chrome
-            .save_pdf(config.output_dir.as_path())
-            .map_err(wrap_internal_error)?
-    );
-
-    // TODO for now screenshot is optional and ignored when it fails
-    let screenshot_result = chrome
+    // All these are optional and ignored when they fail.
+    let to_url = |filename: &str| format!("{}/static/{}", config.hostname, filename);
+    let pdf_file = chrome
+        .save_pdf(config.output_dir.as_path())
+        .map_err(wrap_internal_error);
+    let png_file = chrome
         .save_screenshot(config.output_dir.as_path())
         .map_err(wrap_internal_error);
-    if screenshot_result.is_err() {
-        error!("Screenshot failed: {:?}", screenshot_result);
+    let mhtml_file = chrome
+        .save_mhtml(config.output_dir.as_path())
+        .map_err(wrap_internal_error);
+
+    // Require that at least PDF of PNG is available (MHTML is experimental, it alone
+    // is not enough to consider this a success).
+    if pdf_file.is_err() && png_file.is_err() {
+        return Err(RenderError::InternalError(anyhow::anyhow!(
+            "Failed to capture either PDF or screenshot"
+        )));
     }
-    let png_url = screenshot_result
-        .ok()
-        .map(|path| format!("{}/static/{}", config.hostname, path));
-
-    // TODO also do mhtml when content type is fixed
-
     Ok(RenderResult {
         title,
-        orig_url: req.url.as_str().to_string(),
-        pdf_url,
-        png_url,
-        user: req.user.as_ref().cloned(),
-        channel: req.channel.as_ref().cloned(),
-        team: req.team.as_ref().cloned(),
+        orig_url: req.url.clone(),
+        pdf_url: pdf_file.as_deref().map(to_url).ok(),
+        png_url: png_file.as_deref().map(to_url).ok(),
+        mhtml_url: mhtml_file.as_deref().map(to_url).ok(),
+        user: req.user.clone(),
+        channel: req.channel.clone(),
+        team: req.team.clone(),
     })
 }
 
 impl Renderer {
-    pub fn start(config: &Config) -> Result<RenderSender, failure::Error> {
+    pub fn start(config: &Config) -> anyhow::Result<RenderSender> {
         // Render queue channel.
         let (sender, receiver) = mpsc::channel();
 
@@ -160,7 +154,7 @@ impl Renderer {
         };
 
         // Start render loop.
-        thread::spawn(move || renderer.render_loop());
+        std::thread::spawn(move || renderer.render_loop());
 
         // Return the sender for queueing RenderRequest.
         Ok(RenderSender(Mutex::new(sender)))
@@ -168,33 +162,28 @@ impl Renderer {
 
     fn render_loop(&mut self) {
         for request in self.receiver.iter() {
-            let unknown = "?".to_string();
+            println!("{:?}", request);
             info!(
                 "Handling request from @{} in #{} ({}): {:?}",
-                request.user.as_ref().unwrap_or(&unknown),
-                request.channel.as_ref().unwrap_or(&unknown),
-                request.team.as_ref().unwrap_or(&unknown),
+                request.user.as_deref().unwrap_or("?"),
+                request.channel.as_deref().unwrap_or("?"),
+                request.team.as_deref().unwrap_or("?"),
                 request.url
             );
             let result = handle_request(&request, &self.config, &mut self.chrome);
 
-            if request.slack_callback.is_some() {
-                let callback = request.slack_callback.as_ref().unwrap();
-                let slack_result = match result {
-                    Ok(r) => {
-                        info!("Request success: {:?}", r);
-                        slack::post_success(callback, &r)
-                    }
-                    Err(e) => {
-                        error!("Request failed: {:?}", e);
-                        slack::post_failure(callback, &e)
-                    }
-                };
-                if slack_result.is_err() {
-                    error!("Slack posting failed: {:?}", slack_result.unwrap_err());
+            let slack_result = match result {
+                Ok(result) => {
+                    info!("Request success: {result:?}");
+                    slack::post_success(&request.slack_callback, &result)
                 }
-            } else {
-                info!("No slack callback, result: {:?}", result);
+                Err(err) => {
+                    error!("Request failed: {err:?}");
+                    slack::post_failure(&request.slack_callback, &err)
+                }
+            };
+            if let Err(err) = slack_result {
+                error!("Slack posting failed: {err:?}");
             }
         }
     }

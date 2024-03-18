@@ -1,18 +1,21 @@
 version: "3.2"
 services:
   app:
-    build: .
+    build: ./app
     ports:
       - "2101:2101"
     depends_on:
       - chrome
+    env_file:
+      - path: config/.env
+        required: true
     environment:
       - ROCKET_ADDRESS=0.0.0.0
       - ROCKET_PORT=2101
-      - HOSTNAME=https://udrb.lacop.dev
-      - UDRB_OUTPUT=/output
-      - UDRB_CONFIG=/cfg/config.toml
+      - UDRB_OUTPUT_DIR=/output
+      - UDRB_DOMAIN_CONFIG=/cfg/domains.yaml
       - UDRB_CHROME_ADDRESS=chrome:9222
+      - UDRB_SLACK_MAX_AGE_SECONDS=300
     volumes:
       - type: bind
         source: ./config

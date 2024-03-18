@@ -1,19 +1,13 @@
-extern crate base64;
-extern crate crypto;
-extern crate dns_lookup;
-extern crate reqwest;
-extern crate websocket;
-
-use crypto::digest::Digest;
-use crypto::sha3::Sha3;
-
 use std::fs::File;
 use std::io::Write;
 
+use anyhow::format_err;
+use base64::Engine;
+use log::{info, warn};
+use serde_json::json;
+use sha3::Digest;
 use websocket::client::sync::Client;
 use websocket::stream::sync::TcpStream;
-
-use log::info;
 
 pub struct ChromeDriver {
     address: String,
@@ -21,64 +15,193 @@ pub struct ChromeDriver {
     message_id: u32,
 }
 
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 struct ChromeCommandRequest {
     id: u32,
     method: String,
     params: serde_json::Value,
 }
 
-fn write_bytes_to_directory(
-    bytes: &[u8],
-    dir: &std::path::Path,
-    suffix: &str,
-) -> Result<String, failure::Error> {
-    let mut hasher = Sha3::sha3_256();
-    hasher.input(&bytes);
-
-    let filename = hasher.result_str() + suffix;
-    let output_path = dir.join(&filename);
-
-    std::fs::create_dir_all(dir)?;
-    let mut buffer = File::create(&output_path)?;
-    buffer.write_all(&bytes)?;
-
-    Ok(filename)
+fn bytes_to_hash(bytes: &[u8]) -> String {
+    let mut hasher = sha3::Sha3_256::new();
+    hasher.update(bytes);
+    hex::encode(hasher.finalize())
 }
 
 fn write_base64_to_directory(
     data: &str,
     dir: &std::path::Path,
     suffix: &str,
-) -> Result<String, failure::Error> {
-    let bytes = base64::decode(data)?;
-    write_bytes_to_directory(&bytes, dir, suffix)
+) -> anyhow::Result<String> {
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data)?;
+    let filename = bytes_to_hash(&bytes) + suffix;
+    let output_path = dir.join(&filename);
+
+    std::fs::create_dir_all(dir)?;
+    let mut buffer = File::create(output_path)?;
+    buffer.write_all(&bytes)?;
+
+    Ok(filename)
 }
 
-fn write_text_to_directory(
-    data: &str,
-    dir: &std::path::Path,
-    suffix: &str,
-) -> Result<String, failure::Error> {
-    write_bytes_to_directory(data.as_bytes(), dir, suffix)
+fn get_extension(headers: &[mail_parser::Header]) -> Option<&'static str> {
+    for header in headers {
+        if header.name != mail_parser::HeaderName::ContentType {
+            continue;
+        }
+        let content_type = match &header.value {
+            mail_parser::HeaderValue::ContentType(ct) => ct,
+            _ => {
+                warn!("Invalid content type {:?}", header);
+                continue;
+            }
+        };
+        match (content_type.ctype(), content_type.subtype()) {
+            ("text", Some("html")) => return Some("html"),
+            ("text", Some("css")) => return Some("css"),
+            ("text", Some("javascript")) => return Some("js"),
+            ("image", Some("jpeg")) => return Some("jpg"),
+            ("image", Some("png")) => return Some("png"),
+            ("image", Some("gif")) => return Some("gif"),
+            ("image", Some("bmp")) => return Some("bmp"),
+            ("image", Some("svg+xml")) => return Some("svg"),
+            ("image", Some("webp")) => return Some("webp"),
+            ("application", Some("pdf")) => return Some("pdf"),
+            _ => {
+                warn!("Unknown content type {:?}", content_type);
+                return None;
+            }
+        }
+    }
+    None
 }
 
+fn get_content_location(headers: &[mail_parser::Header]) -> Option<String> {
+    // Content-ID first as Chrome has replaced the href/src with "cid:...".
+    for header in headers {
+        if header.name != mail_parser::HeaderName::ContentId {
+            continue;
+        }
+        return match &header.value {
+            mail_parser::HeaderValue::Text(t) => {
+                let t = t.trim_start_matches('<').trim_end_matches('>');
+                Some(format!("cid:{}", t))
+            }
+            _ => {
+                warn!("Invalid content id {:?}", header);
+                None
+            }
+        };
+    }
+    // Fall back to Content-Location if Content-ID is missing.
+    for header in headers {
+        if header.name != mail_parser::HeaderName::ContentLocation {
+            continue;
+        }
+        return match &header.value {
+            mail_parser::HeaderValue::Text(t) => Some(t.to_string()),
+            _ => {
+                warn!("Invalid content location {:?}", header);
+                None
+            }
+        };
+    }
+    None
+}
+
+fn write_mhtml_to_directory(data: &str, dir: &std::path::Path) -> anyhow::Result<String> {
+    let message = mail_parser::MessageParser::default()
+        .parse(data.as_bytes())
+        .ok_or(format_err!("Failed to parse mhtml"))?;
+
+    // At least two parts: First is the header, second is the downloaded page itself.
+    anyhow::ensure!(message.parts.len() >= 2, "Too few parts in mhtml");
+    anyhow::ensure!(
+        matches!(message.parts[0].body, mail_parser::PartType::Multipart(_)),
+        "First part is not multipart"
+    );
+
+    // Ensure output directory exists.
+    let hash = bytes_to_hash(data.as_bytes());
+    let dir = dir.join(&hash);
+    std::fs::create_dir_all(&dir)?;
+
+    // Dump the raw MHTML for potential debugging.
+    {
+        let mut file = File::create(dir.join("raw.mhtml"))?;
+        file.write_all(data.as_bytes())?;
+        info!("Wrote {}/raw.mhtml", hash);
+    }
+
+    // Write out all the parts except the first one, and remember the filenames.
+    let mut part_filenames = std::collections::HashMap::new();
+    for part in &message.parts[2..] {
+        let filename = format!(
+            "{}.{}",
+            part_filenames.len() + 1,
+            get_extension(&part.headers).ok_or(anyhow::format_err!("Unknown content type"))?
+        );
+        let path = dir.join(&filename);
+        let content_location = match get_content_location(&part.headers) {
+            Some(cl) => dbg!(cl),
+            None => {
+                // Some stuff  might be missing Content-Location, ignore it.
+                println!("no content_location {:?}", part.headers);
+                continue;
+            }
+        };
+        part_filenames.insert(content_location, filename);
+
+        let mut file = File::create(path)?;
+        match &part.body {
+            mail_parser::PartType::Text(text) => file.write_all(text.as_bytes())?,
+            mail_parser::PartType::Html(text) => file.write_all(text.as_bytes())?,
+            mail_parser::PartType::Binary(data) => file.write_all(data)?,
+            _ => return Err(format_err!("Unexpected body")),
+        }
+    }
+
+    // Write out the index.html file with the correct references to the other files.
+    let index_path = dir.join("index.html");
+    let mut index_file = File::create(index_path)?;
+    if let mail_parser::PartType::Html(html) = &message.parts[1].body {
+        let mut html = html.to_string();
+        for (content_location, filename) in part_filenames {
+            html = html.replace(&content_location, &filename);
+        }
+        index_file.write_all(html.as_bytes())?;
+    } else {
+        return Err(format_err!("Unexpected body for index"));
+    }
+
+    Ok(format!("{}/index.html", hash))
+}
+
+// TODO: Rewrite in a way that is robust to Chrome hanging or dieing. Something like:
+// - Have timeouts for websocket reads/writes.
+// - Run each render request in own thread which borrows the chrome connection.
+// - If the whole operation times out cancel the thread, any attempt to access
+//   the chrome connection from it should return error and let the thread die.
 impl ChromeDriver {
-    pub fn new(address: &str) -> Result<ChromeDriver, failure::Error> {
+    pub fn new(address: &str) -> anyhow::Result<ChromeDriver> {
         let chrome = ChromeDriver {
             address: address.to_string(),
             ws: None,
             message_id: 0,
         };
-        // TODO proper await for events
-        // chrome.chrome_command("Page.setLifecycleEventsEnabled", json!({"enabled": false}))?;
+        // Connect to return error early if misconfigured.
+        // TODO: This can fail because chrome might not be ready yet on "docker compose up".
+        //       Retry a few times, or something?
+        // chrome.maybe_connect()?;
+
+        // TODO: Proper await for events via Page.setLifecycleEventsEnabled ?
         Ok(chrome)
     }
 
     // Check if we can talk to chrome and try to reconnect if not.
     // If chrome crashes in the background (sometimes happens for reason we don't understand) Docker will restart it,
     // but the socket will be lost and we need to redo the connection.
-    fn maybe_connect(&mut self) -> Result<(), failure::Error> {
+    fn maybe_connect(&mut self) -> anyhow::Result<()> {
         if self.ws.is_some() {
             // If we have socket try to send arbitrary command to verify it is still alive.
             let command = ChromeCommandRequest {
@@ -110,29 +233,26 @@ impl ChromeDriver {
         let ip = ips.first().ok_or_else(|| format_err!("Lookup failed"))?;
 
         let json_url = format!("http://{}:{}/json/list", ip, port);
-        let body = reqwest::get(json_url.as_str())?.text()?;
+        dbg!(&json_url);
+        let body = reqwest::blocking::get(json_url.as_str())?.text()?;
         let body: serde_json::Value = serde_json::from_str(&body)?;
         let list = body
             .as_array()
             .ok_or_else(|| format_err!("Expected array"))?;
-        ensure!(!list.is_empty(), "Need at least one existing tab");
+        anyhow::ensure!(!list.is_empty(), "Need at least one existing tab");
 
         let websocket_url = list[0]["webSocketDebuggerUrl"]
             .as_str()
             .ok_or_else(|| format_err!("Invalid websocket url"))?;
-        self.ws = Some(websocket::ClientBuilder::new(&websocket_url)?.connect_insecure()?);
+        self.ws = Some(websocket::ClientBuilder::new(websocket_url)?.connect_insecure()?);
         Ok(())
     }
 
-    fn send_command(
-        &mut self,
-        method: &str,
-        params: serde_json::Value,
-    ) -> Result<u32, failure::Error> {
+    fn send_command(&mut self, method: &str, params: serde_json::Value) -> anyhow::Result<u32> {
         let command = ChromeCommandRequest {
             id: self.message_id,
             method: method.to_string(),
-            params: params,
+            params,
         };
         self.message_id += 1;
         let message = websocket::Message::text(serde_json::to_string(&command)?);
@@ -151,7 +271,7 @@ impl ChromeDriver {
         &mut self,
         method: &str,
         params: serde_json::Value,
-    ) -> Result<serde_json::Value, failure::Error> {
+    ) -> anyhow::Result<serde_json::Value> {
         let id = self.send_command(method, params)?;
         loop {
             // If send_command was successful we should have a valid socket around.
@@ -162,12 +282,14 @@ impl ChromeDriver {
                 .recv_message()?
             {
                 websocket::OwnedMessage::Text(response) => {
-                    let response: serde_json::Value = serde_json::from_str(&response)?;
+                    let mut response: serde_json::Value = serde_json::from_str(&response)?;
                     if response["id"] != id {
                         continue;
                     }
-                    // TODO avoid clone, move out of borrowed should be fine here
-                    return Ok(response["result"].clone());
+                    return Ok(response
+                        .get_mut("result")
+                        .expect("bad chrome response")
+                        .take());
                 }
                 _ => {
                     return Err(format_err!("Unexpected return message type"));
@@ -176,15 +298,15 @@ impl ChromeDriver {
         }
     }
 
-    pub fn navigate(&mut self, url: &str) -> Result<(), failure::Error> {
+    pub fn navigate(&mut self, url: &str) -> anyhow::Result<()> {
         self.send_command("Page.navigate", json!({ "url": url }))?;
-        // TODO proper wait
+        // TODO: Proper wait.
         std::thread::sleep(std::time::Duration::from_secs(5));
         Ok(())
     }
 
-    // TODO try to safeguard against too big pages with some hard limits
-    pub fn save_screenshot(&mut self, dir: &std::path::Path) -> Result<String, failure::Error> {
+    // TODO: Try to safeguard against too big pages with some hard limits.
+    pub fn save_screenshot(&mut self, dir: &std::path::Path) -> anyhow::Result<String> {
         let result = self.get_result("Page.getLayoutMetrics", serde_json::Value::Null)?;
         let width = result["contentSize"]["width"]
             .as_i64()
@@ -194,9 +316,9 @@ impl ChromeDriver {
             .ok_or_else(|| format_err!("Missing dimension"))?;
 
         let params = json!({"width": width, "screenWidth": width,
-                            "height": height, "screenHeight": height,
-                            "scale": 1, "deviceScaleFactor": 1,
-                            "mobile": false});
+                                "height": height, "screenHeight": height,
+                                "scale": 1, "deviceScaleFactor": 1,
+                                "mobile": false});
         let _ = self.get_result("Emulation.setDeviceMetricsOverride", params)?;
 
         let params =
@@ -208,7 +330,7 @@ impl ChromeDriver {
         write_base64_to_directory(data, dir, ".png")
     }
 
-    pub fn save_pdf(&mut self, dir: &std::path::Path) -> Result<String, failure::Error> {
+    pub fn save_pdf(&mut self, dir: &std::path::Path) -> anyhow::Result<String> {
         // A4 paper size in inches.
         let params =
             json!({"landscape": false, "scale": 1, "paperWidth": 8.27, "paperHeight": 11.69});
@@ -219,15 +341,15 @@ impl ChromeDriver {
         write_base64_to_directory(data, dir, ".pdf")
     }
 
-    pub fn save_mhtml(&mut self, dir: &std::path::Path) -> Result<String, failure::Error> {
+    pub fn save_mhtml(&mut self, dir: &std::path::Path) -> anyhow::Result<String> {
         let result = self.get_result("Page.captureSnapshot", serde_json::Value::Null)?;
         let data = result["data"]
             .as_str()
             .ok_or_else(|| format_err!("Missing data"))?;
-        write_text_to_directory(data, dir, ".mhtml")
+        write_mhtml_to_directory(data, dir)
     }
 
-    pub fn run_script(&mut self, script: &str) -> Result<(), failure::Error> {
+    pub fn run_script(&mut self, script: &str) -> anyhow::Result<()> {
         let params = json!({"expression": script, "returnByValue": false});
         let _result = self.get_result("Runtime.evaluate", params)?;
         // TODO avoid sleep by handling the result somehow?
@@ -235,7 +357,7 @@ impl ChromeDriver {
         Ok(())
     }
 
-    pub fn get_title(&mut self) -> Result<String, failure::Error> {
+    pub fn get_title(&mut self) -> anyhow::Result<String> {
         let params = json!({"expression": "document.title", "returnByValue": true});
         let result = self.get_result("Runtime.evaluate", params)?;
         let title = result["result"]["value"]
