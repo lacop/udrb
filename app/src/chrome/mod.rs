@@ -163,7 +163,7 @@ fn write_mhtml_to_directory(data: &str, dir: &std::path::Path) -> anyhow::Result
 
     // Write out the index.html file with the correct references to the other files.
     let index_path = dir.join("index.html");
-    let mut index_file = File::create(&index_path)?;
+    let mut index_file = File::create(index_path)?;
     if let mail_parser::PartType::Html(html) = &message.parts[1].body {
         let mut html = html.to_string();
         for (content_location, filename) in part_filenames {
@@ -190,12 +190,11 @@ impl ChromeDriver {
             message_id: 0,
         };
         // Connect to return error early if misconfigured.
-        // TODO: This can fail because chrome might not be ready yet on "docker compuse up".
+        // TODO: This can fail because chrome might not be ready yet on "docker compose up".
         //       Retry a few times, or something?
         // chrome.maybe_connect()?;
 
-        // TODO proper await for events
-        // chrome.chrome_command("Page.setLifecycleEventsEnabled", json!({"enabled": false}))?;
+        // TODO: Proper await for events via Page.setLifecycleEventsEnabled ?
         Ok(chrome)
     }
 
@@ -283,12 +282,14 @@ impl ChromeDriver {
                 .recv_message()?
             {
                 websocket::OwnedMessage::Text(response) => {
-                    let response: serde_json::Value = serde_json::from_str(&response)?;
+                    let mut response: serde_json::Value = serde_json::from_str(&response)?;
                     if response["id"] != id {
                         continue;
                     }
-                    // TODO avoid clone, move out of borrowed should be fine here
-                    return Ok(response["result"].clone());
+                    return Ok(response
+                        .get_mut("result")
+                        .expect("bad chrome response")
+                        .take());
                 }
                 _ => {
                     return Err(format_err!("Unexpected return message type"));

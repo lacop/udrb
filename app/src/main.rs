@@ -11,7 +11,6 @@ use rocket::serde::json::Json;
 
 #[rocket::get("/")]
 fn index() -> &'static str {
-    // TODO: Some sort of fancier index?
     "UDRB is running..."
 }
 
@@ -27,7 +26,7 @@ async fn slash(
         .map_err(|_| BadRequest("Couldn't parse or verify request"))?;
     let (render_request, reply) = request.render_and_reply();
     if let Some(request) = render_request {
-        // TODO: Use async MPSC?
+        // Not async, but the queue is unbounded.
         sender
             .render(request)
             .map_err(|_| BadRequest("Internal error"))?;

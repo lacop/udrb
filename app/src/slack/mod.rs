@@ -235,24 +235,7 @@ fn post_slack_message(callback: &str, message: SlackMessage) -> anyhow::Result<(
     Ok(())
 }
 
-// TODO: Replace with Block Kit (new fancy message format).
 pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()> {
-    // let mut text = String::new();
-    // if let Some(ref user) = result.user {
-    //     writeln!(&mut text, ":bust_in_silhouette: <@{user}>").unwrap();
-    // }
-    // writeln!(
-    //     &mut text,
-    //     ":page_with_curl: *{}*",
-    //     slack_encode(&result.title)
-    // )
-    // .unwrap();
-    // writeln!(&mut text, ":lock: <{}|Original link>", result.orig_url).unwrap();
-    // write!(&mut text, ":unlock: <{}|PDF version>", result.pdf_url).unwrap();
-    // if let Some(ref png_url) = result.png_url {
-    //     write!(&mut text, "\n:camera: <{}|Screenshot>", png_url).unwrap();
-    // }
-
     let mut response_blocks = Vec::new();
 
     // Header with the page title.
