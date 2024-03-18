@@ -1,5 +1,12 @@
 # Universal Document Render Bot
 
+## Slack configuration
+
+* Create new app
+* Get the "Signing secret" and set it in the `.env` file
+* Add a "Slash command" called `/udrb` with request url `https://hostname/slack/slash`, and some description and usage hint.
+* In "Interactivity & Shortcuts" enable "Interactivity and add a new "Request URL" `https://hostname/slack/interactive`.
+
 ## Deploy & run
 
 TODO: Update to use ghcr and CI/CD deployment.
