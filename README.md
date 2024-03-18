@@ -65,3 +65,9 @@ $ docker run -d -p 9222:9222 $(docker build -q .)
 $ cd app/
 $ ROCKET_PORT=2101 UDRB_OUTPUT_DIR=$PWD/../output UDRB_HOSTNAME=http://udrb-dev.lacop.dev UDRB_CHROME_ADDRESS=127.0.0.1:9222 UDRB_DOMAIN_CONFIG=../config/domains.yaml UDRB_SLACK_MAX_AGE_SECONDS=300 UDRB_SLACK_SECRET=... cargo run
 ```
+
+## TODO
+
+* Chrome is not reliable, let the app auto-restart if things go wrong and time out waiting for chrome RPC responses.
+  * Requires some mechanism to reliably restart the chrome container -- maybe via docker socket, trying to do it from within the container itself had its own problems.
+* Favicon is sometimes not at /favicon.ico, need to check the HTML for it to render it properly.
