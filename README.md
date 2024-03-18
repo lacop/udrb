@@ -6,31 +6,32 @@ TODO: Update to use ghcr and CI/CD deployment.
 
 On remote host:
 
-```
+```shell
 $ git clone git@github.com:lacop/udrb.git
 $ cd udrb
-$ sudo docker-compose build
+$ sudo docker compose build
 ```
 
 Copy over config:
 
-```
-$ scp config/config.toml lacop@lacop.dev:udrb/config/config.toml
+```shell
+$ scp config/.env lacop@lacop.dev:udrb/config/
+$ scp config/domains.yaml lacop@lacop.dev:udrb/config/
 ```
 
 Update & rebuild
 
-```
+```shell
 $ git pull origin master
-$ sudo docker-compose build
+$ sudo docker compose build
 ```
 
 Launch on remote:
 
-```
+```shell
 # Stop if running already
-$ sudo docker-compose down -v
-$ sudo docker-compose up -d
+$ sudo docker compose down -v
+$ sudo docker compose up -d
 ```
 
 ## Local development
