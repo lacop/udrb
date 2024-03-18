@@ -1,5 +1,7 @@
 # Universal Document Render Bot
 
+Slack slash command that allows users to capture a URL and post a screenshot, PDF and MHTML archive of the page.
+
 ## Slack configuration
 
 * Create new app
