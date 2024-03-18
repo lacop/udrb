@@ -50,13 +50,13 @@ fn write_base64_to_directory(
     write_bytes_to_directory(&bytes, dir, suffix)
 }
 
-// fn write_text_to_directory(
-//     data: &str,
-//     dir: &std::path::Path,
-//     suffix: &str,
-// ) -> anyhow::Result<String> {
-//     write_bytes_to_directory(data.as_bytes(), dir, suffix)
-// }
+fn write_text_to_directory(
+    data: &str,
+    dir: &std::path::Path,
+    suffix: &str,
+) -> anyhow::Result<String> {
+    write_bytes_to_directory(data.as_bytes(), dir, suffix)
+}
 
 // TODO: Rewrite in a way that is robust to Chrome hanging or dieing. Something like:
 // - Have timeouts for websocket reads/writes.
@@ -221,13 +221,13 @@ impl ChromeDriver {
         write_base64_to_directory(data, dir, ".pdf")
     }
 
-    //     pub fn save_mhtml(&mut self, dir: &std::path::Path) -> Result<String, failure::Error> {
-    //         let result = self.get_result("Page.captureSnapshot", serde_json::Value::Null)?;
-    //         let data = result["data"]
-    //             .as_str()
-    //             .ok_or_else(|| format_err!("Missing data"))?;
-    //         write_text_to_directory(data, dir, ".mhtml")
-    //     }
+    pub fn save_mhtml(&mut self, dir: &std::path::Path) -> anyhow::Result<String> {
+        let result = self.get_result("Page.captureSnapshot", serde_json::Value::Null)?;
+        let data = result["data"]
+            .as_str()
+            .ok_or_else(|| format_err!("Missing data"))?;
+        write_text_to_directory(data, dir, ".mhtml")
+    }
 
     pub fn run_script(&mut self, script: &str) -> anyhow::Result<()> {
         let params = json!({"expression": script, "returnByValue": false});

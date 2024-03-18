@@ -285,16 +285,18 @@ pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()>
         url: Some(result.orig_url.to_string()),
         ..Default::default()
     });
-    buttons_block.elements.push(SlackBlockElement {
-        type_: "button".to_string(),
-        button_text: Some(SlackButtonText {
-            type_: "plain_text".to_string(),
-            text: ":unlock: PDF".to_string(),
-            emoji: true,
-        }),
-        url: Some(result.pdf_url.to_string()),
-        ..Default::default()
-    });
+    if let Some(ref pdf_url) = result.pdf_url {
+        buttons_block.elements.push(SlackBlockElement {
+            type_: "button".to_string(),
+            button_text: Some(SlackButtonText {
+                type_: "plain_text".to_string(),
+                text: ":unlock: PDF".to_string(),
+                emoji: true,
+            }),
+            url: Some(pdf_url.to_string()),
+            ..Default::default()
+        });
+    }
     if let Some(ref png_url) = result.png_url {
         buttons_block.elements.push(SlackBlockElement {
             type_: "button".to_string(),
@@ -304,6 +306,18 @@ pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()>
                 emoji: true,
             }),
             url: Some(png_url.to_string()),
+            ..Default::default()
+        });
+    }
+    if let Some(ref mhtml_url) = result.mhtml_url {
+        buttons_block.elements.push(SlackBlockElement {
+            type_: "button".to_string(),
+            button_text: Some(SlackButtonText {
+                type_: "plain_text".to_string(),
+                text: ":floppy_disk: Archive (experimental :test_tube:)".to_string(),
+                emoji: true,
+            }),
+            url: Some(mhtml_url.to_string()),
             ..Default::default()
         });
     }

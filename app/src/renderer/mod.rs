@@ -51,6 +51,7 @@ impl std::fmt::Display for RenderError {
 }
 
 fn wrap_internal_error(e: anyhow::Error) -> RenderError {
+    log::warn!("Internal error: {:?}", e);
     RenderError::InternalError(e)
 }
 
@@ -60,8 +61,9 @@ pub struct RenderResult {
     pub title: String,
     // URLs to the original document and rendered versions.
     pub orig_url: url::Url,
-    pub pdf_url: String,
+    pub pdf_url: Option<String>,
     pub png_url: Option<String>,
+    pub mhtml_url: Option<String>,
     // User, channel and team names.
     pub user: Option<String>,
     pub channel: Option<String>,
@@ -106,27 +108,32 @@ fn handle_request(
 
     let title = chrome.get_title().map_err(wrap_internal_error)?;
 
-    // TODO use uri! macro with proper input.
+    // All these are optional and ignored when they fail.
     let to_url = |filename: &str| format!("{}/static/{}", config.hostname, filename);
-
     let pdf_file = chrome
         .save_pdf(config.output_dir.as_path())
-        .map_err(wrap_internal_error)?;
-
-    // TODO for now screenshot is optional and ignored when it fails
+        .map_err(wrap_internal_error);
     let png_file = chrome
         .save_screenshot(config.output_dir.as_path())
         .map_err(wrap_internal_error);
-    if png_file.is_err() {
-        error!("Screenshot failed: {png_file:?}");
+    let mhtml_file = chrome
+        .save_mhtml(config.output_dir.as_path())
+        .map_err(wrap_internal_error);
+
+    // Require that at least PDF of PNG is available (MHTML is experimental, it alone
+    // is not enough to consider this a success).
+    if pdf_file.is_err() && png_file.is_err() {
+        return Err(RenderError::InternalError(anyhow::anyhow!(
+            "Failed to capture either PDF or screenshot"
+        )));
     }
 
-    // TODO also do mhtml when content type is fixed
     Ok(RenderResult {
         title,
         orig_url: req.url.clone(),
-        pdf_url: to_url(&pdf_file),
+        pdf_url: pdf_file.as_deref().map(to_url).ok(),
         png_url: png_file.as_deref().map(to_url).ok(),
+        mhtml_url: mhtml_file.as_deref().map(to_url).ok(),
         user: req.user.clone(),
         channel: req.channel.clone(),
         team: req.team.clone(),
