@@ -13,26 +13,32 @@ Slack slash command that allows users to capture a URL and post a screenshot, PD
 
 TODO: Update to use ghcr and CI/CD deployment.
 
-On remote host:
+Optionally build the image locally (VPS is slow):
 
 ```shell
-$ git clone git@github.com:lacop/udrb.git
-$ cd udrb
-$ sudo docker compose build
+$ (cd app/ && docker build -t ghcr.io/lacop/udrb-app . && docker push ghcr.io/lacop/udrb-app)
+$ (cd browser/ && docker build -t ghcr.io/lacop/udrb-chrome . && docker push ghcr.io/lacop/udrb-chrome)
 ```
 
-Copy over config:
+On remote host, update the repo and images:
+
+```shell
+# First time: git clone git@github.com:lacop/udrb.git
+$ cd udrb
+$ git pull origin master
+
+# Fast
+$ sudo docker compose pull
+
+# Slow
+$ sudo docker compose build 
+```
+
+Copy over config, if it has changed:
 
 ```shell
 $ scp config/.env lacop@lacop.dev:udrb/config/
 $ scp config/domains.yaml lacop@lacop.dev:udrb/config/
-```
-
-Update & rebuild
-
-```shell
-$ git pull origin master
-$ sudo docker compose build
 ```
 
 Launch on remote:

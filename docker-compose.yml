@@ -2,6 +2,7 @@ version: "3.2"
 services:
   app:
     build: ./app
+    image: ghcr.io/lacop/udrb-app:latest
     ports:
       - "2101:2101"
     depends_on:
@@ -26,6 +27,7 @@ services:
         target: /output
   chrome:
     build: ./browser
+    image: ghcr.io/lacop/udrb-browser:latest
     ports:
       - "9222:9222"
     restart: on-failure
