@@ -11,6 +11,7 @@ use websocket::stream::sync::TcpStream;
 
 pub struct ChromeDriver {
     address: String,
+    kill_address: String,
     ws: Option<Client<TcpStream>>,
     message_id: u32,
 }
@@ -183,9 +184,10 @@ fn write_mhtml_to_directory(data: &str, dir: &std::path::Path) -> anyhow::Result
 // - If the whole operation times out cancel the thread, any attempt to access
 //   the chrome connection from it should return error and let the thread die.
 impl ChromeDriver {
-    pub fn new(address: &str) -> anyhow::Result<ChromeDriver> {
+    pub fn new(address: &str, kill_address: &str) -> anyhow::Result<ChromeDriver> {
         let chrome = ChromeDriver {
             address: address.to_string(),
+            kill_address: kill_address.to_string(),
             ws: None,
             message_id: 0,
         };
@@ -196,6 +198,14 @@ impl ChromeDriver {
 
         // TODO: Proper await for events via Page.setLifecycleEventsEnabled ?
         Ok(chrome)
+    }
+
+    pub fn kill(&self) -> anyhow::Result<()> {
+        let response = reqwest::blocking::get(&self.kill_address)?;
+        if !response.status().is_success() {
+            return Err(format_err!("Failed to kill chrome"));
+        }
+        Ok(())
     }
 
     // Check if we can talk to chrome and try to reconnect if not.

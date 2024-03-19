@@ -26,6 +26,7 @@ pub struct Config {
     pub hostname: String,
     pub output_dir: std::path::PathBuf,
     pub chrome_address: String,
+    pub chrome_kill_address: String,
     pub slack: SlackConfig,
     pub domains: Vec<DomainConfig>,
 }
@@ -40,6 +41,7 @@ impl Config {
         let hostname = get_env_var("UDRB_HOSTNAME")?;
         let output_dir = get_env_var("UDRB_OUTPUT_DIR")?;
         let chrome_address = get_env_var("UDRB_CHROME_ADDRESS")?;
+        let chrome_kill_address = get_env_var("UDRB_CHROME_KILL_ADDRESS")?;
 
         let slack = SlackConfig {
             secret: get_env_var("UDRB_SLACK_SECRET").ok(),
@@ -63,6 +65,7 @@ impl Config {
             hostname,
             output_dir: std::path::PathBuf::from_str(&output_dir)?,
             chrome_address,
+            chrome_kill_address,
             slack,
             domains,
         })

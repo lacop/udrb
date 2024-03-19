@@ -5,6 +5,7 @@ use crate::slack;
 use std::sync::mpsc;
 use std::sync::Mutex;
 
+use log::warn;
 use log::{error, info};
 
 #[derive(Debug)]
@@ -152,7 +153,11 @@ fn handle_request(
         match handle_request_once(req, config, chrome) {
             Ok(result) => return Ok(result),
             Err(err) => {
+                warn!("Request failed: {:?}, killing chrome and retrying...", err);
                 last_error = Some(err);
+                if let Err(e) = chrome.kill() {
+                    warn!("Failed to kill chrome: {:?}", e);
+                }
                 std::thread::sleep(RETRY_DELAY);
             }
         }
@@ -166,7 +171,7 @@ impl Renderer {
         let (sender, receiver) = mpsc::channel();
 
         // Initialize Chrome driver.
-        let chrome = ChromeDriver::new(&config.chrome_address)?;
+        let chrome = ChromeDriver::new(&config.chrome_address, &config.chrome_kill_address)?;
 
         let mut renderer = Renderer {
             config: config.clone(),
