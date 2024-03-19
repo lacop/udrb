@@ -288,7 +288,7 @@ impl ChromeDriver {
                     }
                     return Ok(response
                         .get_mut("result")
-                        .expect("bad chrome response")
+                        .ok_or(anyhow::format_err!("Missing result"))?
                         .take());
                 }
                 _ => {
