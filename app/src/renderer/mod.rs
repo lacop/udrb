@@ -70,7 +70,7 @@ pub struct RenderResult {
     pub team: Option<String>,
 }
 
-fn handle_request(
+fn handle_request_once(
     req: &RenderRequest,
     config: &Config,
     chrome: &mut ChromeDriver,
@@ -137,6 +137,27 @@ fn handle_request(
         channel: req.channel.clone(),
         team: req.team.clone(),
     })
+}
+
+fn handle_request(
+    req: &RenderRequest,
+    config: &Config,
+    chrome: &mut ChromeDriver,
+) -> Result<RenderResult, RenderError> {
+    const RETRY_COUNT: u32 = 3;
+    const RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+
+    let mut last_error = None;
+    for _ in 0..RETRY_COUNT {
+        match handle_request_once(req, config, chrome) {
+            Ok(result) => return Ok(result),
+            Err(err) => {
+                last_error = Some(err);
+                std::thread::sleep(RETRY_DELAY);
+            }
+        }
+    }
+    Err(last_error.unwrap())
 }
 
 impl Renderer {
