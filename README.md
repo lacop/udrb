@@ -79,4 +79,5 @@ $ ROCKET_PORT=2101 UDRB_OUTPUT_DIR=$PWD/../output UDRB_HOSTNAME=http://udrb-dev.
 * Chrome is not reliable, let the app auto-restart if things go wrong and time out waiting for chrome RPC responses.
   * Requires some mechanism to reliably restart the chrome container -- maybe via docker socket, trying to do it from within the container itself had its own problems.
 * Retry requests multiple times. Put them in queue (not neccesarily persistent) and retry a few times with timeout. On each failure kill/restart chrome.
+* Add `Referrer-Policy: no-referrer` to the `/static` handler.
 * Favicon is sometimes not at /favicon.ico, need to check the HTML for it to render it properly.
