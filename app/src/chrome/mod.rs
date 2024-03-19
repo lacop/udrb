@@ -150,7 +150,7 @@ fn write_mhtml_to_directory(
         );
         let path = dir.join(&filename);
         let content_location = match get_content_location(&part.headers) {
-            Some(cl) => dbg!(cl),
+            Some(cl) => cl,
             None => {
                 // Some stuff  might be missing Content-Location, ignore it.
                 println!("no content_location {:?}", part.headers);
@@ -251,7 +251,6 @@ impl ChromeDriver {
         let ip = ips.first().ok_or_else(|| format_err!("Lookup failed"))?;
 
         let json_url = format!("http://{}:{}/json/list", ip, port);
-        dbg!(&json_url);
         let body = reqwest::blocking::get(json_url.as_str())?.text()?;
         let body: serde_json::Value = serde_json::from_str(&body)?;
         let list = body
