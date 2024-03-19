@@ -11,8 +11,6 @@ Slack slash command that allows users to capture a URL and post a screenshot, PD
 
 ## Deploy & run
 
-TODO: Update to use ghcr and CI/CD deployment.
-
 Optionally build the image locally (VPS is slow):
 
 ```shell

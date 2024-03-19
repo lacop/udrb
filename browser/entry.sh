@@ -22,10 +22,8 @@ xvfb-run -e /dev/stdout \
     --remote-debugging-port=1234 &
 CHROME_PID=$!
 
-# TODO: Auto-restart the process (or whole container) when rendering fails.
-#       Eg. we could have a second socat that listens on "kill port" and 
-#       kills the container whenever it gets a request. Docker will then
-#       restart it, and we just need the Rust app to send a kill request as needed.
+# Wait for connection on the kill port. If we get one exit the container,
+# so Docker restarts us. Try to kill chromium cleanly before that if we can.
 nc -l ${KILL_PORT} -N < /dev/null
 kill ${CHROME_PID}
 sleep 1
