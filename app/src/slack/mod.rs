@@ -88,6 +88,9 @@ pub struct SlackBlock {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<SlackTextBlock>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    accessory: Option<SlackAccessory>,
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -126,6 +129,14 @@ pub struct SlackTextBlock {
     #[serde(rename = "type")]
     type_: String,
     text: String,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct SlackAccessory {
+    #[serde(rename = "type")]
+    type_: String,
+    image_url: String,
+    alt_text: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -248,7 +259,6 @@ pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()>
         ..Default::default()
     });
     // TODO: Maybe extract title from page, not <title>?
-    // TODO: Try extracting summary (first paragraph) to show here.
     // TODO: Extract whole article without ads/menus etc ("reader view"),
     //       use that to show the length / reading time, TTS narration, etc.
 
@@ -258,27 +268,54 @@ pub fn post_success(callback: &str, result: &RenderResult) -> anyhow::Result<()>
         elements: vec![],
         ..Default::default()
     };
-    if let Some(host) = result.orig_url.host_str() {
-        favicon_and_user.elements.push(SlackBlockElement {
-            type_: "image".to_string(),
-            image_url: Some(format!(
-                "{}://{}/favicon.ico",
-                result.orig_url.scheme(),
-                host
-            )),
-            alt_text: Some(host.to_owned()),
-            ..Default::default()
-        });
+    if let Some(ref info) = result.page_info {
+        if let Some(ref icon) = info.icon {
+            favicon_and_user.elements.push(SlackBlockElement {
+                type_: "image".to_string(),
+                image_url: Some(icon.to_string()),
+                alt_text: Some("favicon".to_string()),
+                ..Default::default()
+            });
+        }
+        if let Some(ref author) = info.author {
+            favicon_and_user.elements.push(SlackBlockElement {
+                type_: "mrkdwn".to_string(),
+                text: Some(format!("By _{}_.", author)),
+                ..Default::default()
+            });
+        }
     }
     if let Some(ref user) = result.user {
         favicon_and_user.elements.push(SlackBlockElement {
             type_: "mrkdwn".to_string(),
-            text: Some(format!("Shared by <@{}>", user)),
+            text: Some(format!("Shared by <@{}>.", user)),
             ..Default::default()
         });
     }
     if !favicon_and_user.elements.is_empty() {
         response_blocks.push(favicon_and_user);
+    }
+
+    // Description and image.
+    if let Some(ref info) = result.page_info {
+        if let Some(ref description) = info.description {
+            let mut description_and_image = SlackBlock {
+                type_: "section".to_string(),
+                text: Some(SlackTextBlock {
+                    type_: "mrkdwn".to_string(),
+                    text: description.to_string(),
+                }),
+                ..Default::default()
+            };
+            if let Some(ref image) = info.image {
+                description_and_image.accessory = Some(SlackAccessory {
+                    type_: "image".to_string(),
+                    image_url: image.to_string(),
+                    alt_text: "cover image".to_string(),
+                });
+            }
+            response_blocks.push(description_and_image);
+        }
     }
 
     // Buttons with links to all the versions.

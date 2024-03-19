@@ -1,4 +1,4 @@
-use crate::chrome::ChromeDriver;
+use crate::chrome::{ChromeDriver, PageInfo};
 use crate::config::Config;
 use crate::slack;
 
@@ -65,7 +65,9 @@ pub struct RenderResult {
     pub pdf_url: Option<String>,
     pub png_url: Option<String>,
     pub mhtml_url: Option<String>,
-    // User, channel and team names.
+    // Additional page info extracted from MHTML.
+    pub page_info: Option<PageInfo>,
+    // User, channel and team names (from Slack).
     pub user: Option<String>,
     pub channel: Option<String>,
     pub team: Option<String>,
@@ -117,7 +119,7 @@ fn handle_request_once(
     let png_file = chrome
         .save_screenshot(config.output_dir.as_path())
         .map_err(wrap_internal_error);
-    let mhtml_file = chrome
+    let mhtml_result = chrome
         .save_mhtml(config.output_dir.as_path())
         .map_err(wrap_internal_error);
 
@@ -133,7 +135,11 @@ fn handle_request_once(
         orig_url: req.url.clone(),
         pdf_url: pdf_file.as_deref().map(to_url).ok(),
         png_url: png_file.as_deref().map(to_url).ok(),
-        mhtml_url: mhtml_file.as_deref().map(to_url).ok(),
+        mhtml_url: mhtml_result
+            .as_ref()
+            .map(|(mhtml_file, _)| to_url(mhtml_file))
+            .ok(),
+        page_info: mhtml_result.map(|(_, info)| info).ok().flatten(),
         user: req.user.clone(),
         channel: req.channel.clone(),
         team: req.team.clone(),

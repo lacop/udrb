@@ -1,3 +1,6 @@
+mod info;
+pub use info::PageInfo;
+
 use std::fs::File;
 use std::io::Write;
 
@@ -110,7 +113,10 @@ fn get_content_location(headers: &[mail_parser::Header]) -> Option<String> {
     None
 }
 
-fn write_mhtml_to_directory(data: &str, dir: &std::path::Path) -> anyhow::Result<String> {
+fn write_mhtml_to_directory(
+    data: &str,
+    dir: &std::path::Path,
+) -> anyhow::Result<(String, Option<PageInfo>)> {
     let message = mail_parser::MessageParser::default()
         .parse(data.as_bytes())
         .ok_or(format_err!("Failed to parse mhtml"))?;
@@ -165,17 +171,19 @@ fn write_mhtml_to_directory(data: &str, dir: &std::path::Path) -> anyhow::Result
     // Write out the index.html file with the correct references to the other files.
     let index_path = dir.join("index.html");
     let mut index_file = File::create(index_path)?;
+    let page_info;
     if let mail_parser::PartType::Html(html) = &message.parts[1].body {
         let mut html = html.to_string();
         for (content_location, filename) in part_filenames {
             html = html.replace(&content_location, &filename);
         }
         index_file.write_all(html.as_bytes())?;
+        page_info = PageInfo::from_html(&html).ok();
     } else {
         return Err(format_err!("Unexpected body for index"));
     }
 
-    Ok(format!("{}/index.html", hash))
+    Ok((format!("{}/index.html", hash), page_info))
 }
 
 // TODO: Rewrite in a way that is robust to Chrome hanging or dieing. Something like:
@@ -351,7 +359,10 @@ impl ChromeDriver {
         write_base64_to_directory(data, dir, ".pdf")
     }
 
-    pub fn save_mhtml(&mut self, dir: &std::path::Path) -> anyhow::Result<String> {
+    pub fn save_mhtml(
+        &mut self,
+        dir: &std::path::Path,
+    ) -> anyhow::Result<(String, Option<PageInfo>)> {
         let result = self.get_result("Page.captureSnapshot", serde_json::Value::Null)?;
         let data = result["data"]
             .as_str()
