@@ -11,7 +11,7 @@ Slack slash command that allows users to capture a URL and post a screenshot, PD
 
 ## Deploy & run
 
-Optionally build the image locally (VPS is slow):
+Optionally build the image locally, or wait for github actions to rebuild. Building on the VPS is painfully slow.
 
 ```shell
 $ (cd app/ && docker build -t ghcr.io/lacop/udrb-app . && docker push ghcr.io/lacop/udrb-app)
@@ -74,7 +74,5 @@ $ ROCKET_PORT=2101 UDRB_OUTPUT_DIR=$PWD/../output UDRB_HOSTNAME=http://udrb-dev.
 
 ## TODO
 
-* Chrome is not reliable, let the app auto-restart if things go wrong and time out waiting for chrome RPC responses.
-  * Requires some mechanism to reliably restart the chrome container -- maybe via docker socket, trying to do it from within the container itself had its own problems.
-* Retry requests multiple times. Put them in queue (not neccesarily persistent) and retry a few times with timeout. On each failure kill/restart chrome.
+* More robust handling of chromium hanging - timeouts etc.
 * Add `Referrer-Policy: no-referrer` to the `/static` handler.
