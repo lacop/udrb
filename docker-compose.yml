@@ -27,7 +27,7 @@ services:
         target: /output
   chrome:
     build: ./browser
-    image: ghcr.io/lacop/udrb-browser:latest
+    image: ghcr.io/lacop/udrb-chrome:latest
     ports:
       - "9222:9222"
     restart: on-failure
