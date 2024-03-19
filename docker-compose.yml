@@ -16,6 +16,7 @@ services:
       - UDRB_OUTPUT_DIR=/output
       - UDRB_DOMAIN_CONFIG=/cfg/domains.yaml
       - UDRB_CHROME_ADDRESS=chrome:9222
+      - UDRB_CHROME_KILL_ADDRESS=http://chrome:9999
       - UDRB_SLACK_MAX_AGE_SECONDS=300
     volumes:
       - type: bind
@@ -30,4 +31,5 @@ services:
     image: ghcr.io/lacop/udrb-chrome:latest
     ports:
       - "9222:9222"
-    restart: on-failure
+      - "9999:9999"
+    restart: unless-stopped
